@@ -1,6 +1,6 @@
 [package]
 name = "zakip-voice"
-version = "1.0.0"
+version = "1.0.1"
 description = "Voice transcription desktop app with AI enhancement"
 authors = ["Lukasz Gorka"]
 license = "MIT"
