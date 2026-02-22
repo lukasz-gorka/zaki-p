@@ -7456,7 +7456,7 @@ dependencies = [
 
 [[package]]
 name = "zakip-voice"
-version = "0.9.16"
+version = "1.0.1"
 dependencies = [
  "aes-gcm",
  "anyhow",

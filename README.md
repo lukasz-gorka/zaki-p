@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="public/zakip-logo-removebg-preview.png" alt="Zakip Voice" width="120" />
+  <img src="public/zakip-logo.jpeg" alt="Zakip Voice" width="120" style="border-radius: 16px;" />
 </p>
 
 <h1 align="center">Zakip Voice</h1>

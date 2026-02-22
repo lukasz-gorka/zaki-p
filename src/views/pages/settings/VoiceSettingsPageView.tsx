@@ -1,5 +1,5 @@
 import {invoke} from "@tauri-apps/api/core";
-import {AlertTriangle, AudioLines, ExternalLink, RotateCcw, Settings} from "lucide-react";
+import {AlertTriangle, AudioLines, ExternalLink, Settings} from "lucide-react";
 import {useCallback, useEffect, useState} from "react";
 import {useNavigate} from "react-router-dom";
 import {G} from "../../../appInitializer/module/G.ts";
@@ -143,16 +143,6 @@ export function VoiceSettingsPageView() {
                     description="Press Escape during recording to cancel the transcription process"
                     onValueChange={(checked) => updateSpeechToText({enableEscapeShortcut: checked})}
                 />
-
-                <Separator />
-
-                <div className="grid gap-2">
-                    <Button variant="outline" size="sm" onClick={() => G.voice.forceReset()} className="w-fit">
-                        <RotateCcw className="mr-2 h-4 w-4" />
-                        Reset Stuck Recording
-                    </Button>
-                    <p className="text-xs text-muted-foreground">Use this if recording gets stuck and won't start</p>
-                </div>
             </div>
         </ContentPageLayout>
     );

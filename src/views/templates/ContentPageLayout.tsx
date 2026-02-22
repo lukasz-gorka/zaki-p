@@ -52,8 +52,8 @@ export function ContentPageLayout({children, title, icon: Icon, description, act
                 </div>
             }
         >
-            <div className="flex justify-center w-full">
-                <div className="w-full max-w-lg">{children}</div>
+            <div className="flex justify-center w-full h-full">
+                <div className="w-full max-w-lg h-full">{children}</div>
             </div>
         </PageLayout>
     );

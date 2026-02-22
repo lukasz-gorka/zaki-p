@@ -26,7 +26,7 @@ export function MainLayout({children}: IMainLayout) {
                     <button
                         onClick={() => setSidebarOpen((prev) => !prev)}
                         className="fixed top-3 z-50 flex h-8 w-8 items-center justify-center rounded-sm shadow-md hover:bg-accent transition-all"
-                        style={{left: sidebarOpen ? "calc(var(--sidebar-width) - 40px)" : "12px"}}
+                        style={{left: sidebarOpen ? "calc(var(--sidebar-width) - 20px)" : "22px"}}
                     >
                         {sidebarOpen ? <PanelLeftClose className="h-4 w-4" /> : <PanelLeft className="h-4 w-4" />}
                     </button>

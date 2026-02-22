@@ -1,9 +1,11 @@
-import {Keyboard, Wrench} from "lucide-react";
+import {Keyboard, RotateCcw, Wrench} from "lucide-react";
+import {G} from "../../../appInitializer/module/G.ts";
 import {UpdateSettingsSection} from "../../../autoUpdate/view/UpdateSettingsSection.tsx";
 import {useGlobalState} from "../../../hooks/useGlobalState.ts";
 import {SpeechToTextSettings} from "../../../voice/interfaces/IVoiceSettings.ts";
 import {DebugConsoleView} from "../../settings/DebugConsoleView.tsx";
 import {ContentPageLayout} from "../../templates/ContentPageLayout.tsx";
+import {Button} from "../../ui/button.tsx";
 import {KeyboardShortcutInput} from "../../ui/keyboard-shortcut-input.tsx";
 import {Label} from "../../ui/label.tsx";
 import {Separator} from "../../ui/separator.tsx";
@@ -58,6 +60,16 @@ export function SettingsPageView() {
                 <Separator />
 
                 <UpdateSettingsSection />
+
+                <Separator />
+
+                <div className="grid gap-2">
+                    <Button variant="outline" size="sm" onClick={() => G.voice.forceReset()} className="w-fit">
+                        <RotateCcw className="mr-2 h-4 w-4" />
+                        Reset App State
+                    </Button>
+                    <p className="text-xs text-muted-foreground">Reset the application if something gets stuck or stops working</p>
+                </div>
             </div>
         </ContentPageLayout>
     );

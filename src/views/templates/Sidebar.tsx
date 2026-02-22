@@ -24,8 +24,9 @@ export function AppSidebar() {
 
     return (
         <Sidebar collapsible="offcanvas" className="border-r-0">
-            <SidebarHeader className="px-5 py-6 border-b border-border/50 w-[200px]">
-                <img src="/zakip-logo-removebg-preview.png" className="w-full opacity-85" alt="zakip voice" />
+            <SidebarHeader className="px-5 py-5 border-b border-border/50 w-[200px] flex flex-col items-center justify-center gap-2">
+                <img src="/zakip-logo.jpeg" className="w-[80%] rounded-xl opacity-90" alt="zakip voice" />
+                <span className="text-sm font-semibold tracking-wide text-muted-foreground/70">zaki.p</span>
             </SidebarHeader>
             <SidebarContent>
                 <SidebarGroup className="px-4 py-3">
@@ -60,7 +61,10 @@ export function AppSidebar() {
                         <span>Update v{updateVersion}</span>
                     </button>
                 )}
-                <span className="text-xs text-muted-foreground/60 text-center block">zakip-voice.luksite.pl</span>
+                <div className="flex items-center justify-center gap-3">
+                    <img src="/luksite.svg" className="h-3.5" alt="luksite" />
+                    <span className="text-xs text-muted-foreground/60">zakip-voice.luksite.pl</span>
+                </div>
             </SidebarFooter>
             <SidebarRail />
         </Sidebar>
