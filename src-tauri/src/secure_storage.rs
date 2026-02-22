@@ -2,8 +2,8 @@ use aes_gcm::{
     aead::{Aead, AeadCore, KeyInit, OsRng},
     Aes256Gcm, Nonce,
 };
+use argon2::Argon2;
 use serde::Serialize;
-use sha2::{Digest, Sha256};
 use std::collections::HashMap;
 use std::fs;
 use std::path::PathBuf;
@@ -11,6 +11,9 @@ use std::sync::Mutex;
 use tauri::State;
 
 const STORAGE_FILE: &str = "secure_credentials.enc";
+const FORMAT_VERSION_V1: u8 = 0x01;
+const SALT_LEN: usize = 16;
+const NONCE_LEN: usize = 12;
 
 #[derive(Debug, thiserror::Error)]
 pub enum SecureStorageError {
@@ -36,27 +39,152 @@ impl Serialize for SecureStorageError {
 pub struct SecureStorage {
     storage_path: PathBuf,
     cache: Mutex<HashMap<String, String>>,
-    encryption_key: [u8; 32],
+    encryption_key: Mutex<Option<[u8; 32]>>,
+    salt: Mutex<Option<[u8; SALT_LEN]>>,
+    machine_id: String,
 }
 
 impl SecureStorage {
     pub fn new(app_data_dir: PathBuf) -> Self {
-        // Generate encryption key from machine-specific data
-        // In production, you might want to use a more sophisticated key derivation
         let machine_id = whoami::devicename();
-        let mut hasher = Sha256::new();
-        hasher.update(machine_id.as_bytes());
-        hasher.update(b"com.assistant.app.secret"); // App-specific salt
-        let hash = hasher.finalize();
-
-        let mut key = [0u8; 32];
-        key.copy_from_slice(&hash[..]);
 
         Self {
             storage_path: app_data_dir.join(STORAGE_FILE),
             cache: Mutex::new(HashMap::new()),
-            encryption_key: key,
+            encryption_key: Mutex::new(None),
+            salt: Mutex::new(None),
+            machine_id,
         }
+    }
+
+    fn derive_key_argon2(machine_id: &str, salt: &[u8; SALT_LEN]) -> Result<[u8; 32], SecureStorageError> {
+        let mut output_key = [0u8; 32];
+        let params = argon2::Params::new(19 * 1024, 2, 1, Some(32))
+            .map_err(|e| SecureStorageError::Encryption(format!("Argon2 params error: {}", e)))?;
+        let argon2 = Argon2::new(argon2::Algorithm::Argon2id, argon2::Version::V0x13, params);
+        argon2
+            .hash_password_into(machine_id.as_bytes(), salt, &mut output_key)
+            .map_err(|e| SecureStorageError::Encryption(format!("Argon2 derivation error: {}", e)))?;
+        Ok(output_key)
+    }
+
+    fn get_or_derive_key(&self, salt: &[u8; SALT_LEN]) -> Result<[u8; 32], SecureStorageError> {
+        {
+            let cached = self.encryption_key.lock()
+                .map_err(|e| SecureStorageError::Encryption(format!("Lock error: {}", e)))?;
+            if let Some(key) = *cached {
+                return Ok(key);
+            }
+        }
+
+        let key = Self::derive_key_argon2(&self.machine_id, salt)?;
+
+        {
+            let mut cached = self.encryption_key.lock()
+                .map_err(|e| SecureStorageError::Encryption(format!("Lock error: {}", e)))?;
+            *cached = Some(key);
+        }
+        {
+            let mut cached_salt = self.salt.lock()
+                .map_err(|e| SecureStorageError::Encryption(format!("Lock error: {}", e)))?;
+            *cached_salt = Some(*salt);
+        }
+
+        Ok(key)
+    }
+
+    fn get_or_generate_salt(&self) -> [u8; SALT_LEN] {
+        if let Ok(cached) = self.salt.lock() {
+            if let Some(salt) = *cached {
+                return salt;
+            }
+        }
+        let mut salt = [0u8; SALT_LEN];
+        use aes_gcm::aead::rand_core::RngCore;
+        OsRng.fill_bytes(&mut salt);
+        if let Ok(mut cached) = self.salt.lock() {
+            *cached = Some(salt);
+        }
+        salt
+    }
+
+    fn encrypt_data(&self, plaintext: &[u8]) -> Result<Vec<u8>, SecureStorageError> {
+        let salt = self.get_or_generate_salt();
+        let key = self.get_or_derive_key(&salt)?;
+
+        let cipher = Aes256Gcm::new((&key).into());
+        let nonce = Aes256Gcm::generate_nonce(&mut OsRng);
+
+        let ciphertext = cipher
+            .encrypt(&nonce, plaintext)
+            .map_err(|e| SecureStorageError::Encryption(format!("Encryption failed: {}", e)))?;
+
+        let mut encrypted = Vec::with_capacity(1 + SALT_LEN + NONCE_LEN + ciphertext.len());
+        encrypted.push(FORMAT_VERSION_V1);
+        encrypted.extend_from_slice(&salt);
+        encrypted.extend_from_slice(&nonce);
+        encrypted.extend_from_slice(&ciphertext);
+
+        Ok(encrypted)
+    }
+
+    fn decrypt_data(&self, encrypted: &[u8]) -> Result<Vec<u8>, SecureStorageError> {
+        if encrypted.is_empty() {
+            return Ok(Vec::new());
+        }
+
+        // Legacy format (no version byte): [12-byte nonce][ciphertext]
+        if encrypted[0] != FORMAT_VERSION_V1 {
+            return self.decrypt_data_legacy(encrypted);
+        }
+
+        let min_len = 1 + SALT_LEN + NONCE_LEN + 1;
+        if encrypted.len() < min_len {
+            return Err(SecureStorageError::Encryption(
+                "Encrypted data too short".to_string(),
+            ));
+        }
+
+        let salt: [u8; SALT_LEN] = encrypted[1..1 + SALT_LEN]
+            .try_into()
+            .map_err(|_| SecureStorageError::Encryption("Invalid salt".to_string()))?;
+        let nonce_bytes = &encrypted[1 + SALT_LEN..1 + SALT_LEN + NONCE_LEN];
+        let ciphertext = &encrypted[1 + SALT_LEN + NONCE_LEN..];
+
+        let key = self.get_or_derive_key(&salt)?;
+        let cipher = Aes256Gcm::new((&key).into());
+        let nonce = Nonce::from_slice(nonce_bytes);
+
+        let plaintext = cipher
+            .decrypt(nonce, ciphertext)
+            .map_err(|e| SecureStorageError::Encryption(format!("Decryption failed: {}", e)))?;
+
+        Ok(plaintext)
+    }
+
+    fn decrypt_data_legacy(&self, encrypted: &[u8]) -> Result<Vec<u8>, SecureStorageError> {
+        use sha2::{Digest, Sha256};
+
+        if encrypted.len() < 12 {
+            return Ok(Vec::new());
+        }
+
+        let mut hasher = Sha256::new();
+        hasher.update(self.machine_id.as_bytes());
+        hasher.update(b"com.assistant.app.secret");
+        let hash = hasher.finalize();
+        let mut legacy_key = [0u8; 32];
+        legacy_key.copy_from_slice(&hash[..]);
+
+        let (nonce_bytes, ciphertext) = encrypted.split_at(12);
+        let nonce = Nonce::from_slice(nonce_bytes);
+        let cipher = Aes256Gcm::new((&legacy_key).into());
+
+        let plaintext = cipher
+            .decrypt(nonce, ciphertext)
+            .map_err(|e| SecureStorageError::Encryption(format!("Legacy decryption failed: {}", e)))?;
+
+        Ok(plaintext)
     }
 
     fn load_credentials(&self) -> Result<HashMap<String, String>, SecureStorageError> {
@@ -69,42 +197,23 @@ impl SecureStorage {
             return Ok(HashMap::new());
         }
 
-        // Decrypt
-        let cipher = Aes256Gcm::new((&self.encryption_key).into());
+        let decrypted = self.decrypt_data(&encrypted_data)?;
+        let credentials: HashMap<String, String> = serde_json::from_slice(&decrypted)?;
 
-        // First 12 bytes are nonce
-        if encrypted_data.len() < 12 {
-            return Ok(HashMap::new());
+        // If legacy format was used, re-encrypt with v1 format
+        if !encrypted_data.is_empty() && encrypted_data[0] != FORMAT_VERSION_V1 {
+            if let Ok(()) = self.save_credentials(&credentials) {
+                eprintln!("[SecureStorage] Migrated credentials to Argon2id format");
+            }
         }
 
-        let (nonce_bytes, ciphertext) = encrypted_data.split_at(12);
-        let nonce = Nonce::from_slice(nonce_bytes);
-
-        let decrypted = cipher
-            .decrypt(nonce, ciphertext)
-            .map_err(|e| SecureStorageError::Encryption(format!("Decryption failed: {}", e)))?;
-
-        let credentials: HashMap<String, String> = serde_json::from_slice(&decrypted)?;
         Ok(credentials)
     }
 
     fn save_credentials(&self, credentials: &HashMap<String, String>) -> Result<(), SecureStorageError> {
-        // Serialize
         let json_data = serde_json::to_vec(credentials)?;
+        let encrypted_data = self.encrypt_data(&json_data)?;
 
-        // Encrypt
-        let cipher = Aes256Gcm::new((&self.encryption_key).into());
-        let nonce = Aes256Gcm::generate_nonce(&mut OsRng);
-
-        let ciphertext = cipher
-            .encrypt(&nonce, json_data.as_ref())
-            .map_err(|e| SecureStorageError::Encryption(format!("Encryption failed: {}", e)))?;
-
-        // Prepend nonce to ciphertext
-        let mut encrypted_data = nonce.to_vec();
-        encrypted_data.extend_from_slice(&ciphertext);
-
-        // Ensure directory exists
         if let Some(parent) = self.storage_path.parent() {
             fs::create_dir_all(parent)?;
         }
@@ -118,7 +227,6 @@ impl SecureStorage {
         credentials.insert(key.to_string(), value.to_string());
         self.save_credentials(&credentials)?;
 
-        // Update cache
         if let Ok(mut cache) = self.cache.lock() {
             cache.insert(key.to_string(), value.to_string());
         }
@@ -127,18 +235,15 @@ impl SecureStorage {
     }
 
     pub fn get_credential(&self, key: &str) -> Result<String, SecureStorageError> {
-        // Try cache first
         if let Ok(cache) = self.cache.lock() {
             if let Some(value) = cache.get(key) {
                 return Ok(value.clone());
             }
         }
 
-        // Load from file
         let credentials = self.load_credentials()?;
         match credentials.get(key) {
             Some(value) => {
-                // Update cache
                 if let Ok(mut cache) = self.cache.lock() {
                     cache.insert(key.to_string(), value.clone());
                 }
@@ -153,7 +258,6 @@ impl SecureStorage {
         credentials.remove(key);
         self.save_credentials(&credentials)?;
 
-        // Remove from cache
         if let Ok(mut cache) = self.cache.lock() {
             cache.remove(key);
         }
@@ -162,14 +266,12 @@ impl SecureStorage {
     }
 
     pub fn has_credential(&self, key: &str) -> bool {
-        // Check cache first
         if let Ok(cache) = self.cache.lock() {
             if cache.contains_key(key) {
                 return true;
             }
         }
 
-        // Check file
         if let Ok(credentials) = self.load_credentials() {
             credentials.contains_key(key)
         } else {
@@ -213,7 +315,6 @@ pub fn secure_storage_has(
     Ok(storage.has_credential(&key))
 }
 
-/// Store multiple provider API keys at once
 #[tauri::command]
 pub fn secure_storage_set_provider_keys(
     storage: State<'_, SecureStorage>,
@@ -226,7 +327,6 @@ pub fn secure_storage_set_provider_keys(
     Ok(())
 }
 
-/// Get all provider API keys
 #[tauri::command]
 pub fn secure_storage_get_provider_keys(
     storage: State<'_, SecureStorage>,

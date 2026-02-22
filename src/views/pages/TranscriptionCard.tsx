@@ -1,5 +1,6 @@
-import {Check, ChevronDown, ChevronUp, Clock, Copy, Sparkles, Trash2} from "lucide-react";
-import React, {useState} from "react";
+import {Check, ChevronDown, ChevronUp, Clock, Copy, Pause, Play, Sparkles, Trash2} from "lucide-react";
+import React, {useRef, useState} from "react";
+import {G} from "../../appInitializer/module/G.ts";
 import {Logger} from "../../logger/Logger.ts";
 import {TranscriptionHistoryItem} from "../../voice/interfaces/IVoiceSettings.ts";
 import {Badge} from "../ui/badge.tsx";
@@ -32,8 +33,27 @@ export function TranscriptionCard({item, header, isLoading, loadingBadge, scroll
     const [copied, setCopied] = useState(false);
     const [isExpanded, setIsExpanded] = useState(false);
     const [showRaw, setShowRaw] = useState(false);
+    const [isPlaying, setIsPlaying] = useState(false);
+    const audioCtxRef = useRef<AudioContext | null>(null);
+    const sourceRef = useRef<AudioBufferSourceNode | null>(null);
 
     const canCopy = !isLoading && !!item;
+
+    const stopPlayback = () => {
+        if (sourceRef.current) {
+            try {
+                sourceRef.current.stop();
+            } catch {
+                // already stopped
+            }
+            sourceRef.current = null;
+        }
+        if (audioCtxRef.current) {
+            audioCtxRef.current.close().catch(() => {});
+            audioCtxRef.current = null;
+        }
+        setIsPlaying(false);
+    };
 
     const handleCopy = async () => {
         if (!item) return;
@@ -53,6 +73,34 @@ export function TranscriptionCard({item, header, isLoading, loadingBadge, scroll
             await navigator.clipboard.writeText(item.rawText);
         } catch (error) {
             Logger.error("Failed to copy raw text", {error});
+        }
+    };
+
+    const handlePlayToggle = async (e: React.MouseEvent) => {
+        e.stopPropagation();
+        if (!item?.audioFilePath) return;
+
+        if (isPlaying) {
+            stopPlayback();
+            return;
+        }
+
+        try {
+            const wavData = await G.rustProxy.readAudioFileAsWav(item.audioFilePath);
+            const ctx = new AudioContext();
+            audioCtxRef.current = ctx;
+            const arrayBuffer = wavData.buffer.slice(wavData.byteOffset, wavData.byteOffset + wavData.byteLength) as ArrayBuffer;
+            const audioBuffer = await ctx.decodeAudioData(arrayBuffer);
+            const source = ctx.createBufferSource();
+            source.buffer = audioBuffer;
+            source.connect(ctx.destination);
+            sourceRef.current = source;
+            source.onended = () => stopPlayback();
+            source.start(0);
+            setIsPlaying(true);
+        } catch (error) {
+            Logger.error("Failed to play audio file", {error});
+            stopPlayback();
         }
     };
 
@@ -204,6 +252,19 @@ export function TranscriptionCard({item, header, isLoading, loadingBadge, scroll
                                         Show original
                                     </>
                                 )}
+                            </Button>
+                        )}
+
+                        {/* Play audio button */}
+                        {item?.audioFilePath && (
+                            <Button
+                                variant="ghost"
+                                size="icon"
+                                onClick={handlePlayToggle}
+                                className={`transition-opacity h-auto w-auto p-0 ${isPlaying ? "opacity-100 text-primary" : "opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-foreground"}`}
+                                title={isPlaying ? "Stop playback" : "Play recording"}
+                            >
+                                {isPlaying ? <Pause className="w-3 h-3" /> : <Play className="w-3 h-3" />}
                             </Button>
                         )}
 

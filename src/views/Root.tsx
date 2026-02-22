@@ -9,6 +9,7 @@ import {ROUTE_PATH} from "../navigation/const/ROUTE_PATH.ts";
 import {EnhancerPageView} from "./pages/EnhancerPageView.tsx";
 
 import {SettingsPageView} from "./pages/settings/SettingsPageView.tsx";
+import {SpeechToSpeechPageView} from "./pages/settings/SpeechToSpeechPageView.tsx";
 import {VoiceSettingsPageView} from "./pages/settings/VoiceSettingsPageView.tsx";
 import {UnifiedModelsPageView} from "./pages/UnifiedModelsPageView.tsx";
 import {VoiceHistoryView} from "./pages/VoiceHistoryView.tsx";
@@ -40,9 +41,11 @@ function Root() {
                 <Route path={ROUTE_PATH.HOME} element={<Layout />}>
                     <Route index element={<VoiceHomeView />} />
                     <Route path={ROUTE_PATH.HISTORY} element={<VoiceHistoryView />} />
+                    <Route path={ROUTE_PATH.CONVERSATIONS} element={<Navigate to={ROUTE_PATH.HISTORY} replace />} />
                     <Route path={ROUTE_PATH.MODELS} element={<UnifiedModelsPageView />} />
                     <Route path={ROUTE_PATH.ENHANCER} element={<EnhancerPageView />} />
                     <Route path={ROUTE_PATH.VOICE_SETTINGS} element={<VoiceSettingsPageView />} />
+                    <Route path={ROUTE_PATH.SPEECH_TO_SPEECH} element={<SpeechToSpeechPageView />} />
                     <Route path={ROUTE_PATH.SETTINGS} element={<SettingsPageView />} />
 
                     <Route path="*" element={<Navigate to="/" replace />} />

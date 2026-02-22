@@ -1,23 +1,22 @@
 import {invoke} from "@tauri-apps/api/core";
-import {AlertTriangle, AudioLines, ExternalLink, Keyboard, RotateCcw, Settings} from "lucide-react";
+import {AlertTriangle, AudioLines, ExternalLink, RotateCcw, Settings} from "lucide-react";
 import {useCallback, useEffect, useState} from "react";
-import {NavLink, useNavigate} from "react-router-dom";
+import {useNavigate} from "react-router-dom";
 import {G} from "../../../appInitializer/module/G.ts";
 import type {ShortcutRegistrationError} from "../../../globalShortcuts/globalShortcutsConfig.ts";
 import {useGlobalState} from "../../../hooks/useGlobalState.ts";
-import {getAIModelsWithProvider, getProvidersWithTag} from "../../../integrations/ai/aiModels/aiModels.ts";
 import {AIModelTag} from "../../../integrations/ai/interface/AIModelConfig.ts";
+import {AIModelForUI} from "../../../integrations/ai/interface/AIProviderConfig.ts";
 import {ROUTE_PATH} from "../../../navigation/const/ROUTE_PATH.ts";
 import type {LocalModelStatus} from "../../../rustProxy/interface/LocalModelTypes.ts";
 import {isMacOS} from "../../../utils/appEnvironment.ts";
-import {formatKeyForDisplay, parseKeystroke} from "../../../utils/keystroke.ts";
 import {SpeechToTextSettings} from "../../../voice/interfaces/IVoiceSettings.ts";
-import {FormSelectUI} from "../../form/FormSelectUI.tsx";
 import {FormSwitchUI} from "../../form/FormSwitchUI.tsx";
+import {ModelSelectUI} from "../../form/ModelSelectUI.tsx";
 import {ContentPageLayout} from "../../templates/ContentPageLayout.tsx";
 import {Alert, AlertDescription, AlertTitle} from "../../ui/alert.tsx";
 import {Button} from "../../ui/button.tsx";
-import {Kbd} from "../../ui/kbd.tsx";
+import {KeyboardShortcutInput} from "../../ui/keyboard-shortcut-input.tsx";
 import {Label} from "../../ui/label.tsx";
 import {Separator} from "../../ui/separator.tsx";
 
@@ -42,33 +41,16 @@ export function VoiceSettingsPageView() {
         setShortcutErrors(G.globalShortcuts.getRegistrationErrors());
     }, [fetchLocalModels]);
 
-    const allModels = getAIModelsWithProvider();
-    const filterByTag = (tag: AIModelTag) => allModels.filter((m) => m.tags?.includes(tag));
-    const filterByTagAndProvider = (tag: AIModelTag, providerId: string) => allModels.filter((m) => m.tags?.includes(tag) && m.providerId === providerId);
-
-    const isLocalProvider = speechToText.providerId === "local";
-    const sttModels = isLocalProvider
-        ? localModels.map((m) => ({
-              id: m.id,
-              name: m.name,
-              compositeId: m.id,
-              providerId: "local",
-              providerName: "Local",
-              providerUuid: "local",
-              enabled: true,
-              tags: ["speech-to-text" as AIModelTag],
-          }))
-        : speechToText.providerId
-          ? filterByTagAndProvider("speech-to-text", speechToText.providerId)
-          : filterByTag("speech-to-text");
-    const hasSttModels = sttModels.length > 0 || localModels.length > 0;
-    const sttProviders = getProvidersWithTag("speech-to-text");
-
-    // Build provider list with local option
-    const providerItems = [
-        ...(localModels.length > 0 ? [{value: "local", name: "Local (Free)"}] : []),
-        ...sttProviders.map((provider) => ({value: provider.id, name: provider.name})),
-    ];
+    const localExtraItems: AIModelForUI[] = localModels.map((m) => ({
+        id: m.id,
+        name: m.name,
+        compositeId: `local::${m.id}`,
+        providerId: "local",
+        providerName: "Local (Free)",
+        providerUuid: "local",
+        enabled: true,
+        tags: ["speech-to-text" as AIModelTag],
+    }));
 
     const updateSpeechToText = (updates: Partial<SpeechToTextSettings>) => {
         setVoice({
@@ -99,37 +81,30 @@ export function VoiceSettingsPageView() {
                         </AlertDescription>
                     </Alert>
                 )}
+
                 <div className="grid gap-2">
                     <Label>Plain Transcription Shortcut</Label>
-                    <NavLink to={ROUTE_PATH.SETTINGS} className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors">
-                        {speechToText.globalShortcut ? (
-                            parseKeystroke(speechToText.globalShortcut).map((key, i) => <Kbd key={i}>{formatKeyForDisplay(key)}</Kbd>)
-                        ) : (
-                            <span className="text-xs">Not set</span>
-                        )}
-                        <Keyboard className="h-3.5 w-3.5 ml-auto" />
-                    </NavLink>
+                    <KeyboardShortcutInput
+                        onSave={(value) => updateSpeechToText({globalShortcut: value})}
+                        initialValue={speechToText.globalShortcut}
+                        placeholder="Press keys..."
+                        className="w-full"
+                    />
+                    <p className="text-xs text-muted-foreground">Start/stop voice recording without AI enhancement</p>
                 </div>
 
                 <div className="flex items-end gap-2">
-                    <FormSelectUI
-                        label="Provider"
-                        value={speechToText.providerId}
-                        onValueChange={(value) => {
-                            updateSpeechToText({providerId: value, model: ""});
-                        }}
-                        items={providerItems}
+                    <ModelSelectUI
+                        tag="speech-to-text"
+                        label="STT Model"
+                        value={speechToText.sttModel}
+                        onValueChange={(value) => updateSpeechToText({sttModel: value})}
+                        extraItems={localExtraItems}
                     />
                     <Button variant="ghost" size="icon" className="h-9 w-9 shrink-0" onClick={() => navigate(ROUTE_PATH.MODELS)}>
                         <Settings className="w-4 h-4" />
                     </Button>
                 </div>
-                <FormSelectUI
-                    label="Model"
-                    value={speechToText.model}
-                    onValueChange={(value) => updateSpeechToText({model: value})}
-                    items={sttModels.map((model) => ({value: model.id, name: model.name || model.id}))}
-                />
 
                 <Separator />
 
@@ -161,7 +136,6 @@ export function VoiceSettingsPageView() {
                     label="Play Sound Notifications"
                     description="Play sound effects when starting/stopping recording and copying to clipboard"
                     onValueChange={(checked) => updateSpeechToText({playSoundNotification: checked})}
-                    disabled={!hasSttModels}
                 />
                 <FormSwitchUI
                     value={speechToText.enableEscapeShortcut}
@@ -173,7 +147,6 @@ export function VoiceSettingsPageView() {
                 <Separator />
 
                 <div className="grid gap-2">
-                    <Label>Troubleshooting</Label>
                     <Button variant="outline" size="sm" onClick={() => G.voice.forceReset()} className="w-fit">
                         <RotateCcw className="mr-2 h-4 w-4" />
                         Reset Stuck Recording

@@ -247,13 +247,14 @@ pub async fn transcribe_audio(
     model: String,
     language: Option<String>,
     prompt: Option<String>,
+    audio_format: Option<String>,
     credentials: ProviderCredentials,
 ) -> Result<String, String> {
     let request = crate::ai::types::AudioTranscriptionRequest {
         model: model.clone(),
         language,
         prompt,
-        response_format: None, // Use default (verbose_json)
+        response_format: None,
         temperature: None,
     };
 
@@ -266,7 +267,7 @@ pub async fn transcribe_audio(
         60,
         "Transcription timeout: Operation took longer than 60 seconds",
         async move {
-            proxy.transcribe_audio(audio_data, request, credentials)
+            proxy.transcribe_audio(audio_data, request, credentials, audio_format)
                 .await
                 .map(|r| r.text)
                 .map_err(|e| e.to_string())
@@ -357,17 +358,70 @@ pub async fn simulate_paste() -> Result<(), String> {
 
 #[cfg(target_os = "macos")]
 fn simulate_paste_platform() -> Result<(), String> {
-    let output = std::process::Command::new("osascript")
-        .arg("-e")
-        .arg("tell application \"System Events\" to keystroke \"v\" using command down")
-        .output()
-        .map_err(|e| format!("Failed to execute osascript: {}", e))?;
+    use std::ffi::c_void;
 
-    if !output.status.success() {
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        return Err(format!("osascript failed: {}", stderr));
+    #[link(name = "CoreGraphics", kind = "framework")]
+    extern "C" {
+        fn CGEventSourceCreate(stateID: i32) -> *mut c_void;
+        fn CGEventCreateKeyboardEvent(source: *mut c_void, virtualKey: u16, keyDown: bool) -> *mut c_void;
+        fn CGEventSetFlags(event: *mut c_void, flags: u64);
+        fn CGEventPost(tap: u32, event: *mut c_void);
     }
 
+    #[link(name = "CoreFoundation", kind = "framework")]
+    extern "C" {
+        fn CFRelease(cf: *const c_void);
+    }
+
+    const KCG_EVENT_SOURCE_STATE_HID: i32 = 1;
+    const KCG_HID_EVENT_TAP: u32 = 0;
+    const KVK_ANSI_V: u16 = 9;
+    const KCG_EVENT_FLAG_MASK_COMMAND: u64 = 0x00100000;
+
+    // Check accessibility permission first
+    {
+        #[link(name = "ApplicationServices", kind = "framework")]
+        extern "C" {
+            fn AXIsProcessTrusted() -> bool;
+        }
+        let trusted = unsafe { AXIsProcessTrusted() };
+        eprintln!("[simulate_paste] AXIsProcessTrusted = {}", trusted);
+        if !trusted {
+            return Err("Accessibility permission not granted. Please remove and re-add the app in System Settings → Privacy & Security → Accessibility.".to_string());
+        }
+    }
+
+    eprintln!("[simulate_paste] Starting macOS paste simulation via CGEvent");
+
+    unsafe {
+        let source = CGEventSourceCreate(KCG_EVENT_SOURCE_STATE_HID);
+
+        let key_down = CGEventCreateKeyboardEvent(source, KVK_ANSI_V, true);
+        if key_down.is_null() {
+            if !source.is_null() { CFRelease(source); }
+            return Err("Failed to create CGEvent key down".to_string());
+        }
+        CGEventSetFlags(key_down, KCG_EVENT_FLAG_MASK_COMMAND);
+        CGEventPost(KCG_HID_EVENT_TAP, key_down);
+        CFRelease(key_down);
+
+        std::thread::sleep(std::time::Duration::from_millis(10));
+
+        let key_up = CGEventCreateKeyboardEvent(source, KVK_ANSI_V, false);
+        if key_up.is_null() {
+            if !source.is_null() { CFRelease(source); }
+            return Err("Failed to create CGEvent key up".to_string());
+        }
+        CGEventSetFlags(key_up, KCG_EVENT_FLAG_MASK_COMMAND);
+        CGEventPost(KCG_HID_EVENT_TAP, key_up);
+        CFRelease(key_up);
+
+        if !source.is_null() {
+            CFRelease(source);
+        }
+    }
+
+    eprintln!("[simulate_paste] CGEvent paste simulation executed successfully");
     Ok(())
 }
 
@@ -400,10 +454,13 @@ pub async fn start_audio_recording(
     state: State<'_, AppState>,
     config: Option<AudioRecordingConfig>,
 ) -> Result<AudioRecordingSession, String> {
-    state
-        .audio_manager
-        .start_recording(config, Some(app))
-        .map_err(|e| e.to_string())
+    let manager = Arc::clone(&state.audio_manager);
+    tokio::task::spawn_blocking(move || {
+        manager.start_recording(config, Some(app))
+    })
+    .await
+    .map_err(|e| format!("Task join error: {}", e))?
+    .map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -412,10 +469,13 @@ pub async fn stop_audio_recording(
     #[allow(non_snake_case)]
     sessionId: String,
 ) -> Result<AudioRecordingResult, String> {
-    state
-        .audio_manager
-        .stop_recording(&sessionId)
-        .map_err(|e| e.to_string())
+    let manager = Arc::clone(&state.audio_manager);
+    tokio::task::spawn_blocking(move || {
+        manager.stop_recording(&sessionId)
+    })
+    .await
+    .map_err(|e| format!("Task join error: {}", e))?
+    .map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -424,17 +484,47 @@ pub async fn cancel_audio_recording(
     #[allow(non_snake_case)]
     sessionId: String,
 ) -> Result<(), String> {
-    state
-        .audio_manager
-        .cancel_recording(&sessionId)
-        .map_err(|e| e.to_string())
+    let manager = Arc::clone(&state.audio_manager);
+    tokio::task::spawn_blocking(move || {
+        manager.cancel_recording(&sessionId)
+    })
+    .await
+    .map_err(|e| format!("Task join error: {}", e))?
+    .map_err(|e| e.to_string())
 }
 
 #[tauri::command]
 pub async fn reset_audio_recording(
     state: State<'_, AppState>,
 ) -> Result<bool, String> {
-    Ok(state.audio_manager.force_reset())
+    let manager = Arc::clone(&state.audio_manager);
+    tokio::task::spawn_blocking(move || {
+        manager.force_reset()
+    })
+    .await
+    .map_err(|e| format!("Task join error: {}", e))
+}
+
+// ============================================================================
+// Accessibility Check Commands
+// ============================================================================
+
+/// Check if the app has accessibility permissions (macOS).
+/// Returns true if trusted, false if not.
+#[tauri::command]
+pub fn check_accessibility_permission() -> bool {
+    #[cfg(target_os = "macos")]
+    {
+        #[link(name = "ApplicationServices", kind = "framework")]
+        extern "C" {
+            fn AXIsProcessTrusted() -> bool;
+        }
+        unsafe { AXIsProcessTrusted() }
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        true
+    }
 }
 
 // ============================================================================
@@ -488,6 +578,64 @@ fn play_sound_platform(sound_type: &str) -> Result<(), String> {
 fn play_sound_platform(sound_type: &str) -> Result<(), String> {
     eprintln!("[Sound] Notification sounds not implemented for this platform (type: {})", sound_type);
     Ok(())
+}
+
+// ============================================================================
+// Audio File Playback Commands
+// ============================================================================
+
+#[tauri::command]
+pub async fn read_audio_file_as_wav(file_path: String) -> Result<Vec<u8>, String> {
+    tokio::task::spawn_blocking(move || {
+        let path = std::path::Path::new(&file_path);
+        if !path.exists() {
+            return Err(format!("File not found: {}", file_path));
+        }
+
+        let ext = path.extension().and_then(|e| e.to_str()).unwrap_or("");
+        if ext.eq_ignore_ascii_case("flac") {
+            decode_flac_to_wav(&file_path)
+        } else {
+            // WAV or other — read as-is
+            std::fs::read(&file_path).map_err(|e| format!("Failed to read file: {}", e))
+        }
+    })
+    .await
+    .map_err(|e| format!("Task join error: {}", e))?
+}
+
+fn decode_flac_to_wav(path: &str) -> Result<Vec<u8>, String> {
+    let mut reader = claxon::FlacReader::open(path)
+        .map_err(|e| format!("Failed to open FLAC: {}", e))?;
+
+    let info = reader.streaminfo();
+    let channels = info.channels as u16;
+    let sample_rate = info.sample_rate;
+    let bits_per_sample = info.bits_per_sample as u16;
+
+    let samples: Vec<i32> = reader.samples().collect::<Result<Vec<_>, _>>()
+        .map_err(|e| format!("Failed to decode FLAC samples: {}", e))?;
+
+    let mut wav_buf = Vec::new();
+    let cursor = std::io::Cursor::new(&mut wav_buf);
+    let spec = hound::WavSpec {
+        channels,
+        sample_rate,
+        bits_per_sample,
+        sample_format: hound::SampleFormat::Int,
+    };
+    let mut writer = hound::WavWriter::new(cursor, spec)
+        .map_err(|e| format!("Failed to create WAV writer: {}", e))?;
+
+    for sample in &samples {
+        writer.write_sample(*sample)
+            .map_err(|e| format!("Failed to write WAV sample: {}", e))?;
+    }
+
+    writer.finalize()
+        .map_err(|e| format!("Failed to finalize WAV: {}", e))?;
+
+    Ok(wav_buf)
 }
 
 // ============================================================================

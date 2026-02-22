@@ -16,6 +16,8 @@ pub struct OpenAIProvider {
 impl OpenAIProvider {
     /// Create provider from per-request credentials (new preferred method)
     pub fn from_credentials(credentials: ProviderCredentials) -> AIResult<Self> {
+        crate::ai::url_validation::validate_provider_url(&credentials.base_url)?;
+
         let client = Client::builder()
             .timeout(std::time::Duration::from_secs(120))
             .build()
@@ -299,15 +301,21 @@ impl OpenAIProvider {
         &self,
         audio_data: Vec<u8>,
         request: crate::ai::types::AudioTranscriptionRequest,
+        audio_format: Option<String>,
     ) -> AIResult<crate::ai::types::AudioTranscriptionResponse> {
         let base_url_string = self.get_base_url();
         let base_url = base_url_string.trim_end_matches('/');
         let url = format!("{}/audio/transcriptions", base_url);
 
-        // Create multipart form with audio file
+        let fmt = audio_format.as_deref().unwrap_or("wav");
+        let (file_name, mime_type) = match fmt {
+            "flac" => ("audio.flac", "audio/flac"),
+            _ => ("audio.wav", "audio/wav"),
+        };
+
         let part = reqwest::multipart::Part::bytes(audio_data)
-            .file_name("audio.wav")
-            .mime_str("audio/wav")
+            .file_name(file_name.to_string())
+            .mime_str(mime_type)
             .map_err(|e| AIError::ProviderError(format!("Failed to set MIME type: {}", e)))?;
 
         let actual_model = extract_model_id(&request.model);

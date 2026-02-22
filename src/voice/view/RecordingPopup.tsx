@@ -4,13 +4,15 @@ import {getCurrentWebviewWindow} from "@tauri-apps/api/webviewWindow";
 import {useEffect, useRef, useState} from "react";
 import {createRoot} from "react-dom/client";
 
-type PopupState = "initializing" | "recording" | "transcribing" | "enhancing";
+type PopupState = "initializing" | "recording" | "transcribing" | "enhancing" | "responding" | "speaking";
 
 const STATE_CONFIG: Record<PopupState, {label: string; color: string}> = {
     initializing: {label: "Initializing", color: "#6b7280"},
     recording: {label: "Recording", color: "#ef4444"},
     transcribing: {label: "Transcribing", color: "#3b82f6"},
     enhancing: {label: "Enhancing", color: "#8b5cf6"},
+    responding: {label: "Thinking", color: "#f59e0b"},
+    speaking: {label: "Speaking", color: "#22c55e"},
 };
 
 function formatElapsedTime(totalSeconds: number): string {
@@ -75,12 +77,17 @@ function RecordingPopup() {
 
     const handleStop = async () => {
         if (state === "initializing") return;
-        const action = state === "recording" ? "stop" : "cancel";
-        await emitTo("main", "voice-popup-action", {action});
+        if (state === "speaking") {
+            await emitTo("main", "voice-popup-action", {action: "stop-speaking"});
+        } else if (state === "recording") {
+            await emitTo("main", "voice-popup-action", {action: "stop"});
+        } else {
+            await emitTo("main", "voice-popup-action", {action: "cancel"});
+        }
     };
 
     const config = STATE_CONFIG[state];
-    const isProcessing = state === "transcribing" || state === "enhancing";
+    const isProcessing = state === "transcribing" || state === "enhancing" || state === "responding" || state === "speaking";
 
     const AUDIO_THRESHOLD = 0.005;
     const isSpeaking = audioLevel > AUDIO_THRESHOLD;

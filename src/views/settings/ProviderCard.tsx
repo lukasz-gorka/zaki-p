@@ -18,12 +18,13 @@ interface ProviderCardProps {
     remove: (provider: AIProviderConfig) => void;
 }
 
-type ModelSortFilter = "all" | "speech" | "text";
-type ManualModelType = "chat" | "speech-to-text";
+type ModelSortFilter = "all" | "stt" | "tts" | "text";
+type ManualModelType = "chat" | "speech-to-text" | "text-to-speech";
 
 const MANUAL_MODEL_TYPES: {value: ManualModelType; label: string}[] = [
     {value: "chat", label: "Text"},
-    {value: "speech-to-text", label: "Speech"},
+    {value: "speech-to-text", label: "STT"},
+    {value: "text-to-speech", label: "TTS"},
 ];
 
 export function ProviderCard({provider, update, remove}: ProviderCardProps) {
@@ -109,10 +110,15 @@ export function ProviderCard({provider, update, remove}: ProviderCardProps) {
             filtered = filtered.filter((m) => m.id.toLowerCase().includes(search));
         }
 
-        if (modelSort === "speech") {
+        if (modelSort === "stt") {
             filtered = filtered.filter((m) => {
                 const tags = detectModelTags(m.id);
-                return tags.includes("speech-to-text") || tags.includes("text-to-speech");
+                return tags.includes("speech-to-text");
+            });
+        } else if (modelSort === "tts") {
+            filtered = filtered.filter((m) => {
+                const tags = detectModelTags(m.id);
+                return tags.includes("text-to-speech");
             });
         } else if (modelSort === "text") {
             filtered = filtered.filter((m) => {
@@ -307,7 +313,7 @@ export function ProviderCard({provider, update, remove}: ProviderCardProps) {
                                                 <Input placeholder="Search..." value={modelSearch} onChange={(e) => setModelSearch(e.target.value)} className="h-8 pl-8 text-sm" />
                                             </div>
                                             <div className="flex gap-1">
-                                                {(["all", "speech", "text"] as ModelSortFilter[]).map((filter) => (
+                                                {(["all", "stt", "tts", "text"] as ModelSortFilter[]).map((filter) => (
                                                     <Button
                                                         key={filter}
                                                         variant={modelSort === filter ? "default" : "ghost"}
@@ -315,7 +321,7 @@ export function ProviderCard({provider, update, remove}: ProviderCardProps) {
                                                         className="h-8 text-xs px-2.5"
                                                         onClick={() => setModelSort(filter)}
                                                     >
-                                                        {filter.charAt(0).toUpperCase() + filter.slice(1)}
+                                                        {filter === "stt" ? "STT" : filter === "tts" ? "TTS" : filter.charAt(0).toUpperCase() + filter.slice(1)}
                                                     </Button>
                                                 ))}
                                             </div>

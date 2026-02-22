@@ -5,6 +5,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use tauri::Manager;
 use tauri::tray::{TrayIconBuilder, MouseButton, MouseButtonState, TrayIconEvent};
 use tauri::menu::{MenuBuilder, MenuItemBuilder};
+use tauri_plugin_autostart::MacosLauncher;
 
 // Flag to track if user requested real quit (from tray menu)
 static QUIT_REQUESTED: AtomicBool = AtomicBool::new(false);
@@ -32,6 +33,8 @@ async fn main() {
     };
 
     tauri::Builder::default()
+        .plugin(tauri_plugin_autostart::init(MacosLauncher::LaunchAgent, None))
+        .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
             if let Some(window) = app.get_webview_window("main") {
                 let _ = window.show();
@@ -76,6 +79,7 @@ async fn main() {
             commands::reset_audio_recording,
             // Local model commands
             // System settings
+            commands::check_accessibility_permission,
             commands::open_accessibility_settings,
             // Notification sound
             commands::play_notification_sound,
@@ -84,6 +88,7 @@ async fn main() {
             commands::local_model_download,
             commands::local_model_delete,
             commands::local_transcribe_audio,
+            commands::read_audio_file_as_wav,
         ])
         .setup(|app| {
             // Initialize Secure Storage with app data directory

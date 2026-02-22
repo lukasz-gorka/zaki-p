@@ -4,15 +4,10 @@ use serde::{Deserialize, Serialize};
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(default)]
 pub struct AudioRecordingConfig {
-    /// Sample rate in Hz (default: 48000 for webrtc compatibility)
     pub sample_rate: u32,
-    /// Number of channels (default: 1 for mono)
     pub channels: u16,
-    /// Enable echo cancellation
     pub echo_cancellation: bool,
-    /// Enable noise suppression
     pub noise_suppression: bool,
-    /// Enable automatic gain control
     pub auto_gain_control: bool,
 }
 
@@ -21,8 +16,8 @@ impl Default for AudioRecordingConfig {
         Self {
             sample_rate: 48000,
             channels: 1,
-            echo_cancellation: true,
-            noise_suppression: true,
+            echo_cancellation: false,
+            noise_suppression: false,
             auto_gain_control: true,
         }
     }
@@ -44,14 +39,11 @@ pub struct AudioRecordingSession {
 /// Result of a completed recording
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AudioRecordingResult {
-    /// Session identifier
     pub session_id: String,
-    /// Duration of recording in milliseconds
     pub duration_ms: u64,
-    /// WAV audio data as bytes
     pub audio_data: Vec<u8>,
-    /// Sample rate of the audio
     pub sample_rate: u32,
+    pub audio_format: String,
 }
 
 /// Error types for audio recording

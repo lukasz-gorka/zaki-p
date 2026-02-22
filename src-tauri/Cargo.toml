@@ -30,6 +30,8 @@ tauri-plugin-os = "2"
 tauri-plugin-shell = "2"
 tauri-plugin-updater = "2"
 tauri-plugin-single-instance = "2"
+tauri-plugin-autostart = "2"
+tauri-plugin-opener = "2"
 tokio = { version = "1.0", features = ["full"] }
 reqwest = { version = "0.12", features = ["json", "rustls-tls", "stream", "multipart"] }
 eventsource-stream = "0.2"
@@ -43,14 +45,21 @@ anyhow = "1.0"
 chrono = "0.4"
 # Secure credential storage - use encrypted file instead of keyring (more reliable)
 aes-gcm = "0.10"
-base64 = "0.22"
+argon2 = "0.5"
 sha2 = "0.10"
+base64 = "0.22"
 whoami = "1.5"
+# URL validation
+url = "2"
 # Keyboard/mouse simulation for auto-paste
 enigo = "0.3"
 # Audio recording
 cpal = "0.15"
 hound = "3.5"
+# Audio preprocessing (DSP)
+biquad = "0.4"
+flacenc = "0.4"
+claxon = "0.4"
 # Local whisper model inference
 whisper-rs = "0.12"
 

@@ -1,7 +1,7 @@
 import {invoke} from "@tauri-apps/api/core";
 import {listen} from "@tauri-apps/api/event";
 import {Logger} from "../logger/Logger.ts";
-import type {AudioTranscriptionRequest, ChatCompletionRequest, ChatCompletionResponse, ProviderCredentials} from "./interface/AITypes.ts";
+import type {AudioTranscriptionRequest, ChatCompletionRequest, ChatCompletionResponse, ProviderCredentials, TextToSpeechRequest} from "./interface/AITypes.ts";
 import type {AudioRecordingConfig, AudioRecordingResult, AudioRecordingSession} from "./interface/AudioTypes.ts";
 import type {LocalModelStatus} from "./interface/LocalModelTypes.ts";
 
@@ -15,7 +15,13 @@ export class RustProxy {
         }
     }
 
-    public async transcribeAudio(operationId: string, audioData: Uint8Array, request: AudioTranscriptionRequest, credentials: ProviderCredentials): Promise<string> {
+    public async transcribeAudio(
+        operationId: string,
+        audioData: Uint8Array,
+        request: AudioTranscriptionRequest,
+        credentials: ProviderCredentials,
+        audioFormat?: string,
+    ): Promise<string> {
         try {
             const audioArray = Array.from(audioData);
 
@@ -25,6 +31,7 @@ export class RustProxy {
                 model: request.model,
                 language: request.language,
                 prompt: request.prompt,
+                audioFormat: audioFormat,
                 credentials,
             });
         } catch (error) {
@@ -168,6 +175,16 @@ export class RustProxy {
         }
     }
 
+    public async readAudioFileAsWav(filePath: string): Promise<Uint8Array> {
+        try {
+            const data = await invoke<number[]>("read_audio_file_as_wav", {filePath});
+            return new Uint8Array(data);
+        } catch (error) {
+            Logger.error("[RustProxy] readAudioFileAsWav failed", {error});
+            throw error;
+        }
+    }
+
     public async simulatePaste(): Promise<void> {
         try {
             await invoke("simulate_paste");
@@ -177,12 +194,38 @@ export class RustProxy {
         }
     }
 
+    public async checkAccessibilityPermission(): Promise<boolean> {
+        try {
+            return await invoke<boolean>("check_accessibility_permission");
+        } catch (error) {
+            Logger.error("[RustProxy] checkAccessibilityPermission failed", {error});
+            return false;
+        }
+    }
+
     public async fetchProviderModels(apiKey: string, baseUrl: string): Promise<{id: string; object: string; owned_by?: string}[]> {
         try {
             return await invoke<{id: string; object: string; owned_by?: string}[]>("fetch_provider_models", {apiKey, baseUrl});
         } catch (error) {
             Logger.error("[RustProxy] fetchProviderModels failed", {error});
             throw error;
+        }
+    }
+
+    public async textToSpeech(operationId: string, request: TextToSpeechRequest, credentials: ProviderCredentials): Promise<Uint8Array> {
+        try {
+            const audioData = await invoke<number[]>("text_to_speech", {
+                operationId,
+                text: request.text,
+                model: request.model,
+                voice: request.voice,
+                speed: request.speed,
+                credentials,
+            });
+            return new Uint8Array(audioData);
+        } catch (error) {
+            Logger.error("[RustProxy] textToSpeech failed", {error});
+            throw new Error(`Text-to-speech failed: ${error}`);
         }
     }
 

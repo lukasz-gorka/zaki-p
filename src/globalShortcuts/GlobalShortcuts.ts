@@ -1,3 +1,4 @@
+import {G} from "../appInitializer/module/G.ts";
 import {store} from "../appInitializer/store";
 import {Logger} from "../logger/Logger.ts";
 import {toggleWindow} from "../utils/windowUtils.ts";
@@ -22,7 +23,6 @@ export class GlobalShortcuts {
                 new GlobalShortcut(
                     stt.globalShortcut,
                     async () => {
-                        const {G} = await import("../appInitializer/module/G.ts");
                         await G.voice.toggleRecordingForChat(false);
                     },
                     {
@@ -34,13 +34,12 @@ export class GlobalShortcuts {
             );
         }
 
-        const hasEnhancementConfigured = stt?.enhancementProviderId?.trim() && stt?.enhancementModel?.trim();
+        const hasEnhancementConfigured = stt?.enhancementModel?.trim();
         if (stt?.globalShortcutWithAI?.trim() && hasEnhancementConfigured) {
             allShortcuts.push(
                 new GlobalShortcut(
                     stt.globalShortcutWithAI,
                     async () => {
-                        const {G} = await import("../appInitializer/module/G.ts");
                         await G.voice.toggleRecordingForChat(true);
                     },
                     {
@@ -57,7 +56,6 @@ export class GlobalShortcuts {
                 new GlobalShortcut(
                     stt.globalShortcutAbort,
                     async () => {
-                        const {G} = await import("../appInitializer/module/G.ts");
                         await G.voice.cancelProcessing();
                     },
                     {
@@ -83,6 +81,27 @@ export class GlobalShortcuts {
                     },
                 ),
             );
+        }
+
+        const s2s = voiceState.speechToSpeech;
+        if (s2s?.globalShortcut?.trim()) {
+            const hasChatConfigured = s2s.chatModel?.trim();
+            const hasTtsConfigured = s2s.ttsModel?.trim();
+            if (hasChatConfigured && hasTtsConfigured) {
+                allShortcuts.push(
+                    new GlobalShortcut(
+                        s2s.globalShortcut,
+                        async () => {
+                            await G.voice.toggleRecordingForConversation();
+                        },
+                        {
+                            id: "voice-conversation-toggle",
+                            label: "Toggle Speech-to-Speech",
+                            editable: true,
+                        },
+                    ),
+                );
+            }
         }
 
         this.registrationErrors = await refreshGlobalShortcuts(allShortcuts);

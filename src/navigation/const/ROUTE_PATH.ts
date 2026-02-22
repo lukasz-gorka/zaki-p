@@ -4,5 +4,7 @@ export enum ROUTE_PATH {
     MODELS = "/models",
     ENHANCER = "/enhancer",
     VOICE_SETTINGS = "/voice-settings",
+    CONVERSATIONS = "/conversations",
+    SPEECH_TO_SPEECH = "/speech-to-speech",
     SETTINGS = "/settings",
 }

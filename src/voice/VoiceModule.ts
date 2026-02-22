@@ -4,11 +4,14 @@ import {isRegistered, register, unregister} from "@tauri-apps/plugin-global-shor
 import {G} from "../appInitializer/module/G.ts";
 import {store} from "../appInitializer/store";
 import {AIService} from "../integrations/ai/AIService.ts";
+import {parseModelId} from "../integrations/ai/interface/AIModel.ts";
 import {Logger} from "../logger/Logger.ts";
 import {ChatCompletionRequest, ProviderCredentials} from "../rustProxy/interface/AITypes.ts";
 import type {AudioRecordingResult, AudioRecordingSession} from "../rustProxy/interface/AudioTypes.ts";
 import {copyToClipboard} from "../utils/clipboard.ts";
 import {toast} from "../views/ui/use-toast.ts";
+import {AudioPlayer} from "./audio/AudioPlayer.ts";
+import {saveAudioFile} from "./audioFileStorage.ts";
 import {RECORDING_POPUP_LABEL} from "./const/RECORDING_POPUP_LABEL.ts";
 import {DEFAULT_ENHANCEMENT_PROMPT} from "./const/TRANSCRIPTION_ENHANCEMENT_PROMPT.ts";
 import {IVoiceSettings, TranscriptionHistoryItem} from "./interfaces/IVoiceSettings.ts";
@@ -28,6 +31,8 @@ export class VoiceModule {
     private currentOperationId: string | null = null;
     private abortRequested: boolean = false;
     private isStartingRecording: boolean = false;
+    private audioPlayer: AudioPlayer = new AudioPlayer();
+    private isConversationMode: boolean = false;
 
     constructor(deps: VoiceModuleDeps) {
         this.storeManager = deps.storeManager;
@@ -51,6 +56,31 @@ export class VoiceModule {
         if (isRecording) {
             await this.stopRecordingAndTranscribe();
         } else if (!isStarting) {
+            const settings = this.state();
+
+            const sttParsed = parseModelId(settings.speechToText.sttModel);
+            if (!sttParsed) {
+                toast({
+                    title: "No transcription model selected",
+                    description: "Please select a Speech-to-Text model in settings before recording.",
+                    variant: "destructive",
+                });
+                return;
+            }
+
+            const enableAI = withAI ?? settings.enableAIEnhancement ?? false;
+            if (enableAI) {
+                const enhancementParsed = parseModelId(settings.speechToText.enhancementModel);
+                if (!enhancementParsed || !this.isEnhancementProviderValid(enhancementParsed.providerId)) {
+                    toast({
+                        title: "AI Enhancement not configured",
+                        description: "Please select an enhancement model in settings, or disable AI Enhancement.",
+                        variant: "destructive",
+                    });
+                    return;
+                }
+            }
+
             await this.startRecording();
         } else {
             Logger.warn("[VoiceModule] Recording start already in progress, ignoring duplicate call");
@@ -103,8 +133,16 @@ export class VoiceModule {
 
     private async handlePopupAction(action: string): Promise<void> {
         if (action === "stop") {
-            await this.toggleRecordingForChat();
+            if (this.isConversationMode) {
+                await this.toggleRecordingForConversation();
+            } else {
+                await this.toggleRecordingForChat();
+            }
+        } else if (action === "stop-speaking") {
+            this.stopSpeaking();
+            await this.closeRecordingPopup();
         } else if (action === "cancel") {
+            this.audioPlayer.stop();
             await this.cancelProcessing();
         }
     }
@@ -216,10 +254,14 @@ export class VoiceModule {
             this.currentSession = null;
             this.isStartingRecording = false;
             this.abortRequested = false;
+            this.isConversationMode = false;
             this.currentOperationId = null;
+            this.audioPlayer.stop();
             this.storeManager.setRecordingState(false);
             this.storeManager.setTranscribingState(false);
             this.storeManager.setEnhancingState(false);
+            this.storeManager.setRespondingState(false);
+            this.storeManager.setSpeakingState(false);
             await this.unregisterEscapeShortcut();
             await this.closeRecordingPopup();
 
@@ -280,7 +322,6 @@ export class VoiceModule {
 
                 await emitTo(RECORDING_POPUP_LABEL, `recording-popup-state-${RECORDING_POPUP_LABEL}`, {state: "initializing"});
                 await existing.show();
-                await existing.setFocus();
                 return;
             }
 
@@ -330,7 +371,7 @@ export class VoiceModule {
                 alwaysOnTop: true,
                 decorations: false,
                 skipTaskbar: true,
-                focus: true,
+                focus: false,
                 visible: false,
                 transparent: false,
             });
@@ -375,7 +416,6 @@ export class VoiceModule {
             });
 
             await window.show();
-            await window.setFocus();
 
             await new Promise((resolve) => setTimeout(resolve, 200));
 
@@ -443,11 +483,16 @@ export class VoiceModule {
             const transcribeOperationId = `transcribe-${Date.now()}`;
             this.currentOperationId = transcribeOperationId;
 
+            const sttParsed = parseModelId(settings.speechToText.sttModel);
+            if (!sttParsed) {
+                throw new Error("STT model not configured");
+            }
+
             const {text: transcription} = await this.ai.audio.transcribe(
                 audioBlob,
                 {
-                    providerId: settings.speechToText.providerId,
-                    model: settings.speechToText.model,
+                    providerId: sttParsed.providerId,
+                    model: sttParsed.modelId,
                     language: settings.speechToText.language,
                     prompt: settings.speechToText.prompt,
                 },
@@ -463,8 +508,8 @@ export class VoiceModule {
 
             let finalText = transcription;
             const enableAI = settings.enableAIEnhancement ?? true;
-            const hasEnhancementConfigured = settings.speechToText.enhancementProviderId && settings.speechToText.enhancementModel;
-            const enhancementProviderExists = hasEnhancementConfigured && this.isEnhancementProviderValid();
+            const enhancementParsed = parseModelId(settings.speechToText.enhancementModel);
+            const enhancementProviderExists = enhancementParsed && this.isEnhancementProviderValid(enhancementParsed.providerId);
 
             if (enableAI && enhancementProviderExists) {
                 this.storeManager.transitionTranscribingToEnhancing();
@@ -488,13 +533,21 @@ export class VoiceModule {
                 id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
                 text: finalText,
                 timestamp: Date.now(),
-                modelName: settings.speechToText.model,
+                modelName: sttParsed.modelId,
                 ...(enableAI &&
                     enhancementProviderExists && {
                         rawText: transcription,
                         isEnhanced: true,
                     }),
             };
+
+            // Save audio file
+            try {
+                const audioFilePath = await saveAudioFile(historyItem.id, Array.from(result.audio_data), result.audio_format || "wav");
+                historyItem.audioFilePath = audioFilePath;
+            } catch (saveError) {
+                Logger.warn("[VoiceModule] Failed to save audio file:", {error: saveError});
+            }
 
             this.storeManager.addTranscriptionToHistory(historyItem);
 
@@ -549,7 +602,6 @@ export class VoiceModule {
 
     private async simulatePaste(): Promise<void> {
         try {
-            // Wait for clipboard to be ready before pasting
             await new Promise((resolve) => setTimeout(resolve, 200));
             await G.rustProxy.simulatePaste();
         } catch (error) {
@@ -581,36 +633,24 @@ export class VoiceModule {
 
     private audioResultToBlob(result: AudioRecordingResult): Blob {
         const uint8Array = new Uint8Array(result.audio_data);
-        return new Blob([uint8Array], {type: "audio/wav"});
+        const mimeType = result.audio_format === "flac" ? "audio/flac" : "audio/wav";
+        return new Blob([uint8Array], {type: mimeType});
     }
 
-    private isEnhancementProviderValid(): boolean {
+    private isEnhancementProviderValid(providerId: string): boolean {
         const globalState = store.getState();
-        const settings = this.state();
-        const providerId = settings.speechToText.enhancementProviderId;
-        if (!providerId) return false;
         return globalState.provider.collection.some((p) => p.id === providerId);
     }
 
     private getEnhancementCredentials(): ProviderCredentials {
-        const globalState = store.getState();
         const settings = this.state();
-        const providerId = settings.speechToText.enhancementProviderId;
+        const parsed = parseModelId(settings.speechToText.enhancementModel);
 
-        if (!providerId) {
-            throw new Error("Enhancement provider not configured");
+        if (!parsed) {
+            throw new Error("Enhancement model not configured");
         }
 
-        const provider = globalState.provider.collection.find((p) => p.id === providerId);
-
-        if (!provider) {
-            throw new Error(`Enhancement provider "${providerId}" not found`);
-        }
-
-        return {
-            api_key: provider.apiKey,
-            base_url: provider.baseURL || "https://api.openai.com/v1",
-        };
+        return this.getProviderCredentials(parsed.providerId);
     }
 
     private async enhanceTranscription(rawText: string): Promise<string> {
@@ -619,13 +659,14 @@ export class VoiceModule {
             this.currentOperationId = operationId;
             const settings = this.state();
 
-            if (!settings.speechToText.enhancementModel) {
+            const enhancementParsed = parseModelId(settings.speechToText.enhancementModel);
+            if (!enhancementParsed) {
                 throw new Error("Enhancement model not configured");
             }
 
             const credentials = this.getEnhancementCredentials();
             const enhancementPrompt = settings.speechToText.enhancementPrompt || DEFAULT_ENHANCEMENT_PROMPT;
-            const model = settings.speechToText.enhancementModel;
+            const model = enhancementParsed.modelId;
 
             const promptWithText = enhancementPrompt.replace("{{{MESSAGE}}}", rawText);
 
@@ -669,6 +710,208 @@ export class VoiceModule {
 
             return rawText;
         }
+    }
+
+    public async toggleRecordingForConversation(): Promise<void> {
+        const isRecording = this.currentSession !== null;
+        const isStarting = this.isStartingRecording;
+
+        if (isRecording) {
+            this.isConversationMode = true;
+            await this.stopRecordingAndConverse();
+        } else if (!isStarting) {
+            this.isConversationMode = true;
+            await this.startRecording();
+        } else {
+            Logger.warn("[VoiceModule] Recording start already in progress, ignoring duplicate call");
+        }
+    }
+
+    public stopSpeaking(): void {
+        this.audioPlayer.stop();
+        this.storeManager.setSpeakingState(false);
+    }
+
+    public clearConversationHistory(): void {
+        this.storeManager.clearConversationHistory();
+    }
+
+    public removeConversationSession(sessionId: string): void {
+        this.storeManager.removeConversationSession(sessionId);
+    }
+
+    public clearConversationSessions(): void {
+        this.storeManager.clearConversationSessions();
+        this.storeManager.clearConversationHistory();
+    }
+
+    private async stopRecordingAndConverse(): Promise<void> {
+        try {
+            if (!this.currentSession) {
+                throw new Error("No active recording");
+            }
+
+            const result = await G.rustProxy.stopAudioRecording(this.currentSession.session_id);
+            const audioBlob = this.audioResultToBlob(result);
+
+            this.currentSession = null;
+            this.storeManager.transitionRecordingToTranscribing();
+            await this.unregisterEscapeShortcut();
+            await emitTo(RECORDING_POPUP_LABEL, `recording-popup-state-${RECORDING_POPUP_LABEL}`, {state: "transcribing"});
+
+            const settings = this.state();
+
+            if (settings.speechToText.playSoundNotification) {
+                G.rustProxy.playNotificationSound("stop");
+            }
+
+            const transcribeOperationId = `transcribe-${Date.now()}`;
+            this.currentOperationId = transcribeOperationId;
+
+            const convSttParsed = parseModelId(settings.speechToText.sttModel);
+            if (!convSttParsed) {
+                throw new Error("STT model not configured");
+            }
+
+            const {text: transcription} = await this.ai.audio.transcribe(
+                audioBlob,
+                {
+                    providerId: convSttParsed.providerId,
+                    model: convSttParsed.modelId,
+                    language: settings.speechToText.language,
+                    prompt: settings.speechToText.prompt,
+                },
+                transcribeOperationId,
+            );
+
+            this.currentOperationId = null;
+
+            if (this.abortRequested) {
+                this.abortRequested = false;
+                return;
+            }
+
+            // 2. Send to chat model
+            this.storeManager.transitionTranscribingToResponding();
+            await emitTo(RECORDING_POPUP_LABEL, `recording-popup-state-${RECORDING_POPUP_LABEL}`, {state: "responding"});
+
+            const s2s = settings.speechToSpeech;
+            const chatParsed = parseModelId(s2s.chatModel);
+            if (!chatParsed) {
+                throw new Error("Chat model not configured");
+            }
+            const chatCredentials = this.getProviderCredentials(chatParsed.providerId);
+
+            const conversationHistory = this.state().conversationHistory ?? [];
+            const messages: any[] = [{role: "system", content: s2s.systemPrompt}, ...conversationHistory, {role: "user", content: transcription}];
+
+            const chatOperationId = `chat-${Date.now()}`;
+            this.currentOperationId = chatOperationId;
+
+            const chatResponse = await G.rustProxy.chatCompletion({model: chatParsed.modelId, messages}, chatOperationId, chatCredentials);
+
+            this.currentOperationId = null;
+
+            if (this.abortRequested) {
+                this.abortRequested = false;
+                return;
+            }
+
+            const assistantText = chatResponse.choices[0]?.message?.content?.trim();
+            if (!assistantText) {
+                throw new Error("Chat model returned empty response");
+            }
+
+            // Save conversation history (for context in next turn)
+            const userMsg = {role: "user" as const, content: transcription};
+            const assistantMsg = {role: "assistant" as const, content: assistantText};
+            this.storeManager.addConversationMessage(userMsg);
+            this.storeManager.addConversationMessage(assistantMsg);
+
+            // Save to conversation session
+            const currentState = this.state();
+            const activeSessionId = currentState.activeConversationSessionId;
+            if (activeSessionId) {
+                this.storeManager.appendToConversationSession(activeSessionId, userMsg, assistantMsg);
+            } else {
+                const sessionId = `conv-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+                this.storeManager.addConversationSession({
+                    id: sessionId,
+                    startedAt: Date.now(),
+                    messages: [userMsg, assistantMsg],
+                    modelName: chatParsed.modelId,
+                });
+            }
+
+            // 3. TTS
+            this.storeManager.transitionRespondingToSpeaking();
+            await emitTo(RECORDING_POPUP_LABEL, `recording-popup-state-${RECORDING_POPUP_LABEL}`, {state: "speaking"});
+
+            const ttsParsed = parseModelId(s2s.ttsModel);
+            if (!ttsParsed) {
+                throw new Error("TTS model not configured");
+            }
+            const ttsCredentials = this.getProviderCredentials(ttsParsed.providerId);
+            const ttsOperationId = `tts-${Date.now()}`;
+            this.currentOperationId = ttsOperationId;
+
+            const audioData = await G.rustProxy.textToSpeech(
+                ttsOperationId,
+                {model: ttsParsed.modelId, text: assistantText, voice: s2s.ttsVoice, speed: s2s.ttsSpeed},
+                ttsCredentials,
+            );
+
+            this.currentOperationId = null;
+
+            if (this.abortRequested) {
+                this.abortRequested = false;
+                this.storeManager.setSpeakingState(false);
+                await this.closeRecordingPopup();
+                return;
+            }
+
+            await this.audioPlayer.play(audioData);
+
+            this.storeManager.setSpeakingState(false);
+            await this.closeRecordingPopup();
+        } catch (error) {
+            this.currentOperationId = null;
+
+            if (this.abortRequested) {
+                this.abortRequested = false;
+                return;
+            }
+
+            this.currentSession = null;
+            this.storeManager.setRecordingState(false);
+            this.storeManager.setTranscribingState(false);
+            this.storeManager.setRespondingState(false);
+            this.storeManager.setSpeakingState(false);
+            await this.unregisterEscapeShortcut();
+            await this.closeRecordingPopup();
+            Logger.error("[VoiceModule] Conversation failed:", {error});
+
+            const errorMessage = error instanceof Error ? error.message : String(error);
+            toast({
+                title: "Conversation failed",
+                description: errorMessage,
+                variant: "destructive",
+            });
+
+            throw error;
+        }
+    }
+
+    private getProviderCredentials(providerId: string): ProviderCredentials {
+        const globalState = store.getState();
+        const provider = globalState.provider.collection.find((p) => p.id === providerId);
+        if (!provider) {
+            throw new Error(`Provider "${providerId}" not found`);
+        }
+        return {
+            api_key: provider.apiKey,
+            base_url: provider.baseURL || "https://api.openai.com/v1",
+        };
     }
 
     public async clearHistory(): Promise<void> {

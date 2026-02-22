@@ -202,6 +202,8 @@ export class AIServiceBackend {
             const arrayBuffer = await audioFile.arrayBuffer();
             const audioData = new Uint8Array(arrayBuffer);
 
+            const audioFormat = audioFile.type?.startsWith("audio/") ? audioFile.type.split("/")[1] : undefined;
+
             const transcription = await G.rustProxy.transcribeAudio(
                 opId,
                 audioData,
@@ -211,6 +213,7 @@ export class AIServiceBackend {
                     prompt: options.prompt,
                 },
                 credentials,
+                audioFormat,
             );
 
             return {

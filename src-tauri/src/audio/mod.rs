@@ -1,3 +1,4 @@
+pub mod processing;
 pub mod recorder;
 pub mod types;
 

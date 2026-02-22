@@ -10,6 +10,7 @@ export interface AudioRecordingResult {
     duration_ms: number;
     audio_data: number[];
     sample_rate: number;
+    audio_format: string;
 }
 
 export interface AudioRecordingConfig {

@@ -180,7 +180,7 @@ export function DebugConsoleView() {
     return (
         <Dialog>
             <DialogTrigger asChild>
-                <Button variant="outline" size="sm" className="gap-2">
+                <Button variant="ghost" size="icon" className="h-10 w-10">
                     <Bug className="h-4 w-4" />
                 </Button>
             </DialogTrigger>

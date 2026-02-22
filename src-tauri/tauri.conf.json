@@ -30,6 +30,7 @@
     "longDescription": "A desktop application for voice recording, transcription via OpenAI-compatible APIs, and AI text enhancement. Copies result to clipboard with optional auto-paste. Built with Tauri for secure, native performance.",
     "licenseFile": "../LICENSE",
     "macOS": {
+      "entitlements": "Entitlements.plist",
       "files": {
         "Info.plist": "Info.plist"
       },

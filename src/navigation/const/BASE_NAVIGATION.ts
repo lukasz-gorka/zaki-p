@@ -1,4 +1,4 @@
-import {AudioLines, Bot, History, Mic, Settings, Sparkles} from "lucide-react";
+import {AudioLines, Bot, History, MessageCircle, Mic, Sparkles, Wrench} from "lucide-react";
 import {NavigationItem} from "../interface/NavigationItem.ts";
 import {ROUTE_PATH} from "./ROUTE_PATH.ts";
 
@@ -24,13 +24,18 @@ export const BASE_NAVIGATION: NavigationItem[] = [
         icon: AudioLines,
     },
     {
+        label: "Speech-to-Speech",
+        path: ROUTE_PATH.SPEECH_TO_SPEECH,
+        icon: MessageCircle,
+    },
+    {
         label: "Enhancer",
         path: ROUTE_PATH.ENHANCER,
         icon: Sparkles,
     },
     {
-        label: "Settings",
+        label: "Advanced",
         path: ROUTE_PATH.SETTINGS,
-        icon: Settings,
+        icon: Wrench,
     },
 ];

@@ -78,9 +78,10 @@ impl AIProxy {
         audio_data: Vec<u8>,
         request: AudioTranscriptionRequest,
         credentials: ProviderCredentials,
+        audio_format: Option<String>,
     ) -> AIResult<AudioTranscriptionResponse> {
         let provider = OpenAIProvider::from_credentials(credentials)?;
-        provider.transcribe_audio(audio_data, request).await
+        provider.transcribe_audio(audio_data, request, audio_format).await
     }
 
     /// Generate speech from text - credentials passed per-request
