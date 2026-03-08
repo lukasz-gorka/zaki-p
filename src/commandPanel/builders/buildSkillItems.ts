@@ -7,7 +7,9 @@ export function buildSkillItems(navigate: (path: string) => void, onClose: () =>
     const skillState = store.getState().skills as {list: ISkill[]; activeSkillId: string} | undefined;
     if (!skillState?.list) return [];
 
-    const skills = [...skillState.list].sort((a, b) => a.label.localeCompare(b.label));
+    const licenseState = store.getState().license;
+    const isPro = licenseState?.status === "active";
+    const skills = [...skillState.list].filter((s) => isPro || !s.pro).sort((a, b) => a.label.localeCompare(b.label));
 
     return skills.map((skill) => ({
         id: `skill-${skill.uuid}`,

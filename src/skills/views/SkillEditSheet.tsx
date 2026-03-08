@@ -363,7 +363,7 @@ export function SkillEditSheet({skill, open, onSave, onClose}: SkillEditSheetPro
 
 function SkillAgentsCard({skillUuid}: {skillUuid: string}) {
     const [chatState] = useGlobalState("chat" as any) as [IChatStoreModel, any];
-    const agents = (chatState?.assistants || []).filter((a) => !a.system);
+    const agents = (chatState?.agents || []).filter((a) => !a.system);
     const chat = getChatModule();
 
     if (agents.length === 0) return null;

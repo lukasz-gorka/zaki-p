@@ -77,6 +77,7 @@ export class SkillModule {
             label: getUniqueName("New Skill", this.existingNames()),
             copyToClipboard: true,
             silentMode: false,
+            inputSource: "voice",
         };
         this.addSkill(skill);
         return skill;

@@ -32,6 +32,9 @@ jobs:
       version: ${{ inputs.version }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          submodules: true
+          token: ${{ secrets.PAT_TOKEN }}
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -71,6 +74,7 @@ jobs:
           AZURE_CERT_NAME: ${{ secrets.AZURE_CERT_NAME }}
           WINDOWS_CERTIFICATE: ${{ secrets.WINDOWS_CERTIFICATE }}
           WINDOWS_CERTIFICATE_PASSWORD: ${{ secrets.WINDOWS_CERTIFICATE_PASSWORD }}
+          LICENSE_URL: ${{ secrets.LICENSE_URL }}
         with:
           tagName: v${{ inputs.version }}-windows
           releaseName: zakip voice v${{ inputs.version }} for Windows

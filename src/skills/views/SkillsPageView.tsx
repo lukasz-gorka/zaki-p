@@ -9,6 +9,7 @@ import {DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger
 import {Input} from "../../views/ui/input.tsx";
 import {KeyboardShortcutInput} from "../../views/ui/keyboard-shortcut-input.tsx";
 import {ScrollArea} from "../../views/ui/scroll-area.tsx";
+import {useLicense} from "../../hooks/useLicense.ts";
 import {ISkill, ISkillStore} from "../interfaces/ISkill.ts";
 import {getSkillModule} from "../plugin.ts";
 import {DynamicIcon} from "./DynamicIcon.tsx";
@@ -93,6 +94,7 @@ function GroupedSkillList({items, renderItem, prepend}: {items: ISkill[]; render
 
 export function SkillsPageView() {
     const [skillState] = useGlobalState("skills" as any) as [ISkillStore, any];
+    const {isPro} = useLicense();
     const skills = getSkillModule();
     const [editingSkill, setEditingSkill] = useState<ISkill | null>(null);
     const [searchValue, setSearchValue] = useState("");
@@ -124,7 +126,7 @@ export function SkillsPageView() {
     );
     const handleShortcutSave = useCallback((skill: ISkill, keystroke: string) => skills.updateSkill({...skill, keystroke}), [skills]);
 
-    const list = skillState?.list || [];
+    const list = (skillState?.list || []).filter((s) => isPro || !s.pro);
     const filtered = list.filter((s) => s.label?.toLowerCase().includes(searchValue.toLowerCase()));
 
     const renderSkillItem = (skill: ISkill) => (

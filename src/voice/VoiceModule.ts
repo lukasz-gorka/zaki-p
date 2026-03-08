@@ -625,7 +625,7 @@ export class VoiceModule {
 
                 Logger.warn("[VoiceModule] Accessibility permissions not granted. User should:", {
                     data: {
-                        steps: ["1. Open System Settings", "2. Go to Privacy & Security > Accessibility", "3. Enable ai-assistant-app", "4. Restart the app"],
+                        steps: ["1. Open System Settings", "2. Go to Privacy & Security > Accessibility", "3. Enable zaki-p", "4. Restart the app"],
                     },
                 });
             } else {

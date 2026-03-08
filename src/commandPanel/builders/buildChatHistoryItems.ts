@@ -29,7 +29,7 @@ export function buildChatHistoryItems(navigate: (path: string) => void, onClose:
                 icon: "MessageSquare",
                 onAction: async () => {
                     const {getChatModule} = await import("../../../pro/chat/plugin.ts");
-                    getChatModule().loadConversation(item.id, item.conversation, item.assistantId);
+                    getChatModule().loadConversation(item.id, item.conversation, item.agentId);
                     navigate(ROUTE_PATH.CHAT);
                     onClose();
                 },

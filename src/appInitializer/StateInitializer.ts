@@ -1,9 +1,8 @@
-import {createCompositeModelId} from "../integrations/ai/interface/AIModel.ts";
 import {getAppData} from "../integrations/storage/localStoreActions.ts";
 import {SecureStorage} from "../integrations/storage/secureStorage.ts";
 import {Logger} from "../logger/Logger.ts";
 import {PluginRegistry} from "../plugins/PluginRegistry.ts";
-import {DEFAULT_ENHANCEMENT_PROMPT} from "../voice/const/TRANSCRIPTION_ENHANCEMENT_PROMPT.ts";
+import {DEFAULT_SKILL_STORE} from "../skills/interfaces/ISkill.ts";
 import {StateAutoSaver} from "./StateAutoSaver.ts";
 import {StateCleanup} from "./StateCleanup.ts";
 import {store} from "./store";
@@ -15,108 +14,35 @@ export class StateInitializer {
         let state = await this.mergeWithLocalData();
         state = await this.mergeWithSecureStorage(state);
         state = StateCleanup.cleanEphemeralState(state) as IGlobalState;
-        state = this.migrateVoiceSettings(state);
-        state = this.migrateEnhancerToSkill(state);
+        state = this.ensureDefaultSkills(state);
 
         store.setState(state);
     }
 
-    private static migrateVoiceSettings(state: IGlobalState): IGlobalState {
-        const stt = state.voice?.speechToText as any;
-        const s2s = state.voice?.speechToSpeech as any;
-        if (!stt && !s2s) return state;
-
-        let changed = false;
-        const newStt = {...stt};
-        const newS2s = {...s2s};
-
-        // Migrate STT: old providerId + model -> sttModel composite
-        if (stt?.providerId && stt?.model && !stt.sttModel) {
-            newStt.sttModel = createCompositeModelId(stt.providerId, stt.model);
-            changed = true;
-        }
-        delete newStt.providerId;
-        delete newStt.model;
-
-        // Migrate enhancement: old enhancementProviderId + enhancementModel -> enhancementModel composite
-        if (stt?.enhancementProviderId && stt?.enhancementModel && !stt.enhancementModel?.includes("::")) {
-            newStt.enhancementModel = createCompositeModelId(stt.enhancementProviderId, stt.enhancementModel);
-            changed = true;
-        }
-        delete newStt.enhancementProviderId;
-
-        // Migrate S2S chat: old chatProviderId + chatModel -> chatModel composite
-        if (s2s?.chatProviderId && s2s?.chatModel && !s2s.chatModel?.includes("::")) {
-            newS2s.chatModel = createCompositeModelId(s2s.chatProviderId, s2s.chatModel);
-            changed = true;
-        }
-        delete newS2s.chatProviderId;
-
-        // Migrate S2S TTS: old ttsProviderId + ttsModel -> ttsModel composite
-        if (s2s?.ttsProviderId && s2s?.ttsModel && !s2s.ttsModel?.includes("::")) {
-            newS2s.ttsModel = createCompositeModelId(s2s.ttsProviderId, s2s.ttsModel);
-            changed = true;
-        }
-        delete newS2s.ttsProviderId;
-
-        if (changed) {
-            Logger.info("[StateInitializer] Migrated voice settings to composite model IDs");
-        }
-
-        return {
-            ...state,
-            voice: {
-                ...state.voice,
-                speechToText: newStt,
-                speechToSpeech: newS2s,
-            },
-        };
-    }
-
-    private static migrateEnhancerToSkill(state: IGlobalState): IGlobalState {
-        // One-time migration: move enhancer settings to the default-enhancer skill
-        const stt = state.voice?.speechToText as any;
-        if (!stt?.enhancementModel?.trim()) return state;
-
+    private static ensureDefaultSkills(state: IGlobalState): IGlobalState {
         const skills = (state as any).skills;
         if (!skills?.list) return state;
 
-        const enhancerSkill = skills.list.find((s: any) => s.uuid === "default-enhancer");
-        if (!enhancerSkill) return state;
-
-        // Already migrated if skill has a model set
-        if (enhancerSkill.model?.trim()) return state;
-
-        Logger.info("[StateInitializer] Migrating enhancer settings to default-enhancer skill");
+        const defaultByUuid = new Map(DEFAULT_SKILL_STORE.list.map((d) => [d.uuid, d]));
+        const existingUuids = new Set(skills.list.map((s: any) => s.uuid));
+        const missing = DEFAULT_SKILL_STORE.list.filter((d) => !existingUuids.has(d.uuid));
 
         const updatedList = skills.list.map((s: any) => {
-            if (s.uuid !== "default-enhancer") return s;
-            return {
-                ...s,
-                model: stt.enhancementModel,
-                instruction: stt.enhancementPrompt || DEFAULT_ENHANCEMENT_PROMPT,
-                keystroke: stt.globalShortcutWithAI || "",
-            };
+            const def = defaultByUuid.get(s.uuid);
+            if (!def) return s;
+            if (s.pro === def.pro) return s;
+            return {...s, pro: def.pro ?? undefined};
         });
 
-        // Clean up old fields from voice settings
-        const newStt = {...stt};
-        delete newStt.enhancementModel;
-        delete newStt.enhancementPrompt;
-        delete newStt.globalShortcutWithAI;
+        const finalList = [...missing, ...updatedList];
+        if (missing.length === 0 && finalList.every((s: any, i: number) => s === skills.list[i])) return state;
 
-        // Clean up old enableAIEnhancement flag
-        const newVoice = {...state.voice, speechToText: newStt};
-        delete (newVoice as any).enableAIEnhancement;
-        delete (newVoice as any).isEnhancing;
-        delete (newVoice as any).enhancingStartTime;
-
+        if (missing.length > 0) Logger.info(`[StateInitializer] Adding ${missing.length} missing default skill(s)`);
         return {
             ...state,
-            voice: newVoice,
             skills: {
                 ...skills,
-                list: updatedList,
+                list: finalList,
             },
         } as IGlobalState;
     }

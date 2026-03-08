@@ -244,7 +244,7 @@ impl SecureStorage {
 
         let mut hasher = Sha256::new();
         hasher.update(self.machine_id.as_bytes());
-        hasher.update(b"com.assistant.app.secret");
+        hasher.update(b"com.zakip.app.secret");
         let hash = hasher.finalize();
         let mut legacy_key = [0u8; 32];
         legacy_key.copy_from_slice(&hash[..]);

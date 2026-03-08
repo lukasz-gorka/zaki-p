@@ -5,7 +5,7 @@ export interface IHistoryElement {
     conversation: IChatMessage[];
     date: string;
     name: string;
-    assistantId: string;
+    agentId: string;
     isFavorite?: boolean;
     tags?: string[];
     skillName?: string;

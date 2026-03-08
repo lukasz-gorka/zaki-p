@@ -19,8 +19,8 @@ export interface IChatStoreModel {
     conversationId: string;
     messages: IChatMessage[];
     isLoading: boolean;
-    assistants: IAgent[];
-    activeAssistantId: string;
+    agents: IAgent[];
+    activeAgentId: string;
     streamingMessage: IStreamingMessage | null;
     currentOperationId: string | null;
     enableStreaming: boolean;
@@ -32,6 +32,18 @@ export interface IChatStoreModel {
     loadingStatus: string | null;
 }
 
+const DEFAULT_AGENT_ID = "default-agent";
+
+export const DEFAULT_AGENT: IAgent = {
+    id: DEFAULT_AGENT_ID,
+    name: "Assistant",
+    description: "General-purpose AI assistant",
+    avatar: "",
+    mainPrompt: "You are a helpful assistant. Answer concisely and accurately.",
+    defaultModel: "",
+    skills: [],
+};
+
 export const DEFAULT_CHAT_STATE: IChatStoreModel = {
     inputValue: "",
     model: "",
@@ -39,8 +51,8 @@ export const DEFAULT_CHAT_STATE: IChatStoreModel = {
     conversationId: "",
     messages: [],
     isLoading: false,
-    assistants: [],
-    activeAssistantId: "",
+    agents: [DEFAULT_AGENT],
+    activeAgentId: DEFAULT_AGENT_ID,
     streamingMessage: null,
     currentOperationId: null,
     enableStreaming: true,
