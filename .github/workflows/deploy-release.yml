@@ -105,7 +105,7 @@ jobs:
             # .app.tar.gz is required for Tauri auto-updater (update-manifest.json)
             UPDATER_FILE=$(find ./artifacts -name "*.app.tar.gz" -not -name "*.sig" | head -n 1)
             # Use versioned filename for compatibility with version extraction from URL
-            VERSIONED_UPDATER_FILENAME="zakip-voice_${VERSION}_universal.app.tar.gz"
+            VERSIONED_UPDATER_FILENAME="zaki-p_${VERSION}_universal.app.tar.gz"
 
             if [ -n "$UPDATER_FILE" ]; then
               ORIGINAL_UPDATER_FILENAME=$(basename "$UPDATER_FILE")

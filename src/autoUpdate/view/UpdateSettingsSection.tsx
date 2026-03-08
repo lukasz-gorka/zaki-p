@@ -86,7 +86,7 @@ export function UpdateSettingsSection() {
                 {error && <p className="text-xs text-destructive">{error}</p>}
 
                 <div className="flex items-center gap-2 pt-1">
-                    <Button variant="link" size="sm" className="h-auto p-0 text-xs text-muted-foreground" onClick={() => open("https://zakip-voice.luksite.pl/downloads/")}>
+                    <Button variant="link" size="sm" className="h-auto p-0 text-xs text-muted-foreground" onClick={() => open("https://zakip.luksite.pl/download/")}>
                         <ExternalLink className="mr-1 h-3 w-3" />
                         Manual download
                     </Button>

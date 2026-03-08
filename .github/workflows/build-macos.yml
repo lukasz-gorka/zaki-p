@@ -115,7 +115,7 @@ jobs:
             if [ -n "$DMG_FILE" ]; then
               echo "Rebuilding DMG with signed app: $DMG_FILE"
               rm -f "$DMG_FILE"
-              hdiutil create -volname "zakip-voice" -srcfolder "$APP_BUNDLE" -ov -format UDZO "$DMG_FILE"
+              hdiutil create -volname "zaki-p" -srcfolder "$APP_BUNDLE" -ov -format UDZO "$DMG_FILE"
               echo "DMG rebuilt."
             fi
 

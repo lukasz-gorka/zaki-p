@@ -1,5 +1,5 @@
 {
-  "name": "zakip-voice",
+  "name": "zaki-p",
   "private": true,
   "version": "1.0.1",
   "type": "module",
@@ -10,11 +10,11 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/lukasz-gorka/zakip-voice.git"
+    "url": "https://github.com/lukasz-gorka/zaki-p.git"
   },
-  "homepage": "https://github.com/lukasz-gorka/zakip-voice",
+  "homepage": "https://github.com/lukasz-gorka/zaki-p",
   "bugs": {
-    "url": "https://github.com/lukasz-gorka/zakip-voice/issues"
+    "url": "https://github.com/lukasz-gorka/zaki-p/issues"
   },
   "scripts": {
     "dev": "vite",

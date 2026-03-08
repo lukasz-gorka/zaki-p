@@ -4,7 +4,7 @@ import {LicenseSection} from "./LicenseSection.tsx";
 
 export function LicenseSettingsPageView() {
     return (
-        <ContentPageLayout title="License" icon={KeyRound} description="Manage your zakip-voice Pro license">
+        <ContentPageLayout title="License" icon={KeyRound} description="Manage your zaki-p Pro license">
             <LicenseSection />
         </ContentPageLayout>
     );

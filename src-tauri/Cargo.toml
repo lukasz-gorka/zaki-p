@@ -1,11 +1,11 @@
 [package]
-name = "zakip-voice"
+name = "zaki-p"
 version = "1.0.1"
 description = "Voice transcription desktop app with AI enhancement"
 authors = ["Lukasz Gorka"]
 license = "MIT"
-repository = "https://github.com/lukasz-gorka/zakip-voice"
-homepage = "https://zakip-voice.luksite.pl"
+repository = "https://github.com/lukasz-gorka/zaki-p"
+homepage = "https://zakip.luksite.pl"
 keywords = ["ai", "assistant", "productivity", "tauri", "desktop"]
 categories = ["gui", "utilities"]
 edition = "2021"

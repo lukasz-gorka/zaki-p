@@ -199,7 +199,7 @@ if [ "$SKIP_BUILD" = false ]; then
       DMG_DIR=$(dirname "$OLD_DMG")
       rm -f "$OLD_DMG"
       # Create new DMG with signed app
-      hdiutil create -volname "zakip-voice" -srcfolder "$APP_BUNDLE" -ov -format UDZO "$OLD_DMG"
+      hdiutil create -volname "zaki-p" -srcfolder "$APP_BUNDLE" -ov -format UDZO "$OLD_DMG"
       echo -e "${GREEN}✅ DMG rebuilt with signed app${NC}"
     fi
 
@@ -376,8 +376,8 @@ if [ "$DEPLOY" = true ]; then
 
   # Upload .app.tar.gz and signature for auto-updater
   # Use versioned filename for compatibility with version extraction from URL
-  VERSIONED_UPDATER_FILENAME="zakip-voice_${VERSION}_aarch64.app.tar.gz"
-  VERSIONED_SIG_FILENAME="zakip-voice_${VERSION}_aarch64.app.tar.gz.sig"
+  VERSIONED_UPDATER_FILENAME="zaki-p_${VERSION}_aarch64.app.tar.gz"
+  VERSIONED_SIG_FILENAME="zaki-p_${VERSION}_aarch64.app.tar.gz.sig"
 
   if [ -n "$UPDATER_FILE" ] && [ -f "$UPDATER_FILE" ]; then
     echo -e "${BLUE}📤 Uploading updater bundle as ${VERSIONED_UPDATER_FILENAME}...${NC}"

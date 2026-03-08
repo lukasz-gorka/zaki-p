@@ -99,7 +99,7 @@ jobs:
             OUTPUT_APPIMAGE="$APPIMAGE_FILE"
             echo "Found existing AppImage: $OUTPUT_APPIMAGE"
           else
-            OUTPUT_APPIMAGE="$APPIMAGE_DIR/zakip-voice_${{ inputs.version }}_amd64.AppImage"
+            OUTPUT_APPIMAGE="$APPIMAGE_DIR/zaki-p_${{ inputs.version }}_amd64.AppImage"
             echo "AppImage not found, will rebuild as: $OUTPUT_APPIMAGE"
           fi
 

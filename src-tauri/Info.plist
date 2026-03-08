@@ -3,9 +3,9 @@
 <plist version="1.0">
 <dict>
     <key>CFBundleIdentifier</key>
-    <string>pl.luksite.zakip-voice</string>
+    <string>pl.luksite.zaki-p</string>
     <key>CFBundleName</key>
-    <string>zakip voice</string>
+    <string>zaki-p</string>
     <key>CFBundleShortVersionString</key>
     <string>1.0.1</string>
     <key>CFBundleVersion</key>

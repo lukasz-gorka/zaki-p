@@ -41,14 +41,14 @@
       "timestampUrl": "http://timestamp.digicert.com"
     }
   },
-  "productName": "zakip-voice",
-  "mainBinaryName": "zakip-voice",
-  "identifier": "pl.luksite.zakip-voice",
+  "productName": "zaki-p",
+  "mainBinaryName": "zaki-p",
+  "identifier": "pl.luksite.zaki-p",
   "plugins": {
     "updater": {
       "active": true,
       "endpoints": [
-        "https://zakip-voice.luksite.pl/downloads/update-manifest.json"
+        "https://zakip.luksite.pl/download/update-manifest.json"
       ],
       "dialog": false,
       "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDhGRDZCQTZEN0E3RkUzNzUKUldSMTQzOTZiYnJXajg2bVMxeDlyM2FrVlUzcktyanBucjBwMDlEWUNhbHdNOU9hV2UzQzZPcFMK",
@@ -64,7 +64,7 @@
         "decorations": true,
         "fullscreen": false,
         "transparent": true,
-        "title": "zakip voice",
+        "title": "zaki-p",
         "width": 850,
         "height": 1100,
         "useHttpsScheme": true

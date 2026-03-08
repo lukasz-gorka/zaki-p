@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What This Is
 
-**zakip-voice** — a Tauri 2.0 desktop app for voice transcription with AI enhancement. Records audio via system microphone, transcribes it through OpenAI-compatible APIs, optionally enhances the text with an LLM, and copies the result to clipboard with optional auto-paste.
+**zaki-p** — a Tauri 2.0 desktop app for voice transcription with AI enhancement. Records audio via system microphone, transcribes it through OpenAI-compatible APIs, optionally enhances the text with an LLM, and copies the result to clipboard with optional auto-paste.
 
 ## Development Commands
 

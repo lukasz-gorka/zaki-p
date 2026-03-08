@@ -1,8 +1,8 @@
 <p align="center">
-  <img src="public/zakip-logo.jpeg" alt="Zakip Voice" width="120" style="border-radius: 16px;" />
+  <img src="public/zakip-logo.jpeg" alt="zaki.p" width="120" style="border-radius: 16px;" />
 </p>
 
-<h1 align="center">Zakip Voice</h1>
+<h1 align="center">zaki.p</h1>
 
 <p align="center"><strong>Open-source desktop voice transcription with AI enhancement.</strong></p>
 
@@ -54,7 +54,7 @@ Built with [Tauri 2.0](https://tauri.app/) (Rust + React + TypeScript). Cross-pl
 
 ### Download Pre-built Binaries
 
-Download the latest release for your platform from the [Releases](https://github.com/lukasz-gorka/zakip-voice/releases) page:
+Download the latest release for your platform from the [Releases](https://github.com/lukasz-gorka/zaki-p/releases) page:
 
 | Platform | Format |
 |----------|--------|
@@ -88,8 +88,8 @@ sudo apt install libwebkit2gtk-4.1-dev libgtk-3-dev libappindicator3-dev librsvg
 #### Build Steps
 
 ```bash
-git clone https://github.com/lukasz-gorka/zakip-voice.git
-cd zakip-voice
+git clone https://github.com/lukasz-gorka/zaki-p.git
+cd zaki-p
 pnpm install
 pnpm tauri build
 ```
@@ -144,7 +144,7 @@ Enhancement requires configuring a provider and model in the UI. Any text comple
 ### Two-layer design: React frontend + Rust backend
 
 ```
-zakip-voice/
+zaki-p/
 ├── src/                          # React frontend (TypeScript)
 │   ├── appInitializer/           # App boot sequence, G singleton, global store
 │   ├── integrations/ai/          # AI abstraction layer (AIService, AIServiceBackend)
@@ -297,7 +297,7 @@ Auto-paste requires accessibility permissions. When prompted, grant permission i
 
 If the app is unsigned, you may need to:
 ```bash
-xattr -cr /Applications/zakip-voice.app
+xattr -cr /Applications/zaki-p.app
 ```
 Then right-click the app and select **Open**.
 
@@ -305,7 +305,7 @@ Then right-click the app and select **Open**.
 
 If you encounter `Could not create default EGL display: EGL_BAD_PARAMETER`:
 ```bash
-WEBKIT_DISABLE_COMPOSITING_MODE=1 ./zakip-voice.AppImage
+WEBKIT_DISABLE_COMPOSITING_MODE=1 ./zaki-p.AppImage
 ```
 
 For auto-paste on Wayland, you may need `wtype` or `dotool` installed.

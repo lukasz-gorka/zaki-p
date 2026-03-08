@@ -87,7 +87,7 @@ export function AppSidebar() {
                 )}
                 <div className="flex items-center justify-center gap-3">
                     <img src="/luksite.svg" className="h-3.5" alt="luksite" />
-                    <span className="text-xs text-muted-foreground/60">zakip-voice.luksite.pl</span>
+                    <span className="text-xs text-muted-foreground/60">zakip.luksite.pl</span>
                 </div>
             </SidebarFooter>
             <SidebarRail />

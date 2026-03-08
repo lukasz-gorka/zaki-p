@@ -1,6 +1,6 @@
 import {load, Store} from "@tauri-apps/plugin-store";
 
-export const storeFileName = import.meta.env.DEV ? "zakip-voice-store.dev.json" : "zakip-voice-store.json";
+export const storeFileName = import.meta.env.DEV ? "zaki-p-store.dev.json" : "zaki-p-store.json";
 
 let _appStore: Store | null = null;
 
