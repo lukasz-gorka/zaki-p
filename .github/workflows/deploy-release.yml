@@ -1,0 +1,266 @@
+name: Deploy Release
+
+on:
+  workflow_call:
+    inputs:
+      version:
+        description: 'Version number'
+        required: true
+        type: string
+      platform:
+        description: 'Platform (macos, windows, linux)'
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  validate-deployment:
+    runs-on: ubuntu-latest
+    outputs:
+      should_deploy: ${{ steps.check_deploy.outputs.should_deploy }}
+    steps:
+      - name: Check if deployment is configured
+        id: check_deploy
+        run: |
+          if [ -n "${{ secrets.SSH_PRIVATE_KEY }}" ] && [ -n "${{ secrets.SSH_HOST }}" ] && [ -n "${{ secrets.SSH_USER }}" ] && [ -n "${{ secrets.DEPLOY_PATH }}" ]; then
+            echo "should_deploy=true" >> $GITHUB_OUTPUT
+            echo "SSH deployment is configured"
+          else
+            echo "should_deploy=false" >> $GITHUB_OUTPUT
+            echo "SSH deployment is not configured (will skip deploy step)"
+          fi
+
+  deploy:
+    needs: validate-deployment
+    if: ${{ needs.validate-deployment.outputs.should_deploy == 'true' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ inputs.platform }}-build
+          path: ./artifacts
+
+      - name: Display structure of downloaded files
+        run: ls -R ./artifacts
+
+      - name: Setup SSH
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+          SSH_HOST: ${{ secrets.SSH_HOST }}
+          SSH_USER: ${{ secrets.SSH_USER }}
+          SSH_PORT: ${{ secrets.SSH_PORT || '22' }}
+        run: |
+          mkdir -p ~/.ssh
+          echo "$SSH_PRIVATE_KEY" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -H -p "$SSH_PORT" "$SSH_HOST" >> ~/.ssh/known_hosts
+
+      - name: Create deployment directory
+        env:
+          SSH_HOST: ${{ secrets.SSH_HOST }}
+          SSH_USER: ${{ secrets.SSH_USER }}
+          SSH_PORT: ${{ secrets.SSH_PORT || '22' }}
+          DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
+        run: |
+          ssh -i ~/.ssh/deploy_key -p "$SSH_PORT" $SSH_USER@$SSH_HOST "mkdir -p $DEPLOY_PATH/releases/v${{ inputs.version }}"
+
+      - name: Upload build artifacts
+        env:
+          SSH_HOST: ${{ secrets.SSH_HOST }}
+          SSH_USER: ${{ secrets.SSH_USER }}
+          SSH_PORT: ${{ secrets.SSH_PORT || '22' }}
+          DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
+        run: |
+          # Find and upload all build artifacts (including .sig signature files and .app.tar.gz for macOS updater)
+          find ./artifacts -type f \( -name "*.dmg" -o -name "*.app.tar.gz" -o -name "*.AppImage" -o -name "*.AppImage.tar.gz" -o -name "*.nsis.zip" -o -name "*.exe" -o -name "*.msi" -o -name "*.deb" -o -name "*.sig" \) -exec scp -i ~/.ssh/deploy_key -P "$SSH_PORT" {} $SSH_USER@$SSH_HOST:$DEPLOY_PATH/releases/v${{ inputs.version }}/ \;
+
+      - name: Update manifests (platform-specific versioning)
+        env:
+          SSH_HOST: ${{ secrets.SSH_HOST }}
+          SSH_USER: ${{ secrets.SSH_USER }}
+          SSH_PORT: ${{ secrets.SSH_PORT || '22' }}
+          DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
+          BASE_URL: ${{ secrets.BASE_URL }}
+        run: |
+          VERSION="${{ inputs.version }}"
+          PLATFORM="${{ inputs.platform }}"
+          UPDATER_BASE_URL="${BASE_URL:-https://YOUR_DOMAIN_HERE}"
+
+          # Download current manifests (if they exist)
+          scp -i ~/.ssh/deploy_key -P "$SSH_PORT" $SSH_USER@$SSH_HOST:$DEPLOY_PATH/manifest.json ./current-manifest.json 2>/dev/null || echo "{}" > ./current-manifest.json
+          scp -i ~/.ssh/deploy_key -P "$SSH_PORT" $SSH_USER@$SSH_HOST:$DEPLOY_PATH/update-manifest.json ./current-update-manifest.json 2>/dev/null || echo '{"platforms":{}}' > ./current-update-manifest.json
+          scp -i ~/.ssh/deploy_key -P "$SSH_PORT" $SSH_USER@$SSH_HOST:$DEPLOY_PATH/versions.json ./current-versions.json 2>/dev/null || echo '{}' > ./current-versions.json
+
+          # Find built files
+          if [ "$PLATFORM" = "macos" ]; then
+            # DMG is for manual downloads (manifest.json)
+            BUILD_FILE=$(find ./artifacts -name "*.dmg" -not -name "*.sig" | head -n 1)
+            BUILD_FILENAME=$(basename "$BUILD_FILE")
+
+            # .app.tar.gz is required for Tauri auto-updater (update-manifest.json)
+            UPDATER_FILE=$(find ./artifacts -name "*.app.tar.gz" -not -name "*.sig" | head -n 1)
+            # Use versioned filename for compatibility with version extraction from URL
+            VERSIONED_UPDATER_FILENAME="zakip-voice_${VERSION}_universal.app.tar.gz"
+
+            if [ -n "$UPDATER_FILE" ]; then
+              ORIGINAL_UPDATER_FILENAME=$(basename "$UPDATER_FILE")
+              SIG_FILE="${UPDATER_FILE}.sig"
+              SIGNATURE=$(cat "$SIG_FILE" 2>/dev/null | tr -d '\r\n' || echo "")
+
+              # Rename uploaded files on server to include version number
+              echo "Renaming updater files to include version..."
+              ssh -i ~/.ssh/deploy_key -p "$SSH_PORT" $SSH_USER@$SSH_HOST "cd $DEPLOY_PATH/releases/v$VERSION && mv '$ORIGINAL_UPDATER_FILENAME' '$VERSIONED_UPDATER_FILENAME' 2>/dev/null || true && mv '${ORIGINAL_UPDATER_FILENAME}.sig' '${VERSIONED_UPDATER_FILENAME}.sig' 2>/dev/null || true"
+
+              UPDATER_FILENAME="$VERSIONED_UPDATER_FILENAME"
+              if [ -n "$SIGNATURE" ]; then
+                echo "Signature loaded successfully"
+              else
+                echo "WARNING: No signature found - auto-update will fail!"
+              fi
+            else
+              # Fallback to DMG if no .app.tar.gz (but auto-update will fail)
+              UPDATER_FILENAME="$BUILD_FILENAME"
+              SIG_FILE="${BUILD_FILE}.sig"
+              SIGNATURE=$(cat "$SIG_FILE" 2>/dev/null | tr -d '\r\n' || echo "")
+              echo "WARNING: No .app.tar.gz found, using DMG - auto-update will FAIL!"
+            fi
+
+            MANIFEST_KEY="macos"
+            # Support all macOS architectures (universal includes both arm64 and x86_64)
+            UPDATE_KEYS=("darwin-universal" "darwin-aarch64" "darwin-x86_64")
+          elif [ "$PLATFORM" = "windows" ]; then
+            # .exe for manual download (manifest.json)
+            BUILD_FILE=$(find ./artifacts -name "*-setup.exe" -not -name "*.sig" | head -n 1)
+            if [ -z "$BUILD_FILE" ]; then
+              BUILD_FILE=$(find ./artifacts -name "*.msi" -not -name "*.sig" | head -n 1)
+            fi
+            if [ -z "$BUILD_FILE" ]; then
+              BUILD_FILE=$(find ./artifacts -name "*.exe" -not -name "*.sig" | head -n 1)
+            fi
+            BUILD_FILENAME=$(basename "$BUILD_FILE")
+
+            # *-setup.exe is the Tauri 2.0 NSIS updater file on Windows
+            UPDATER_FILE=$(find ./artifacts -name "*-setup.exe" -not -name "*.sig" | head -n 1)
+            if [ -n "$UPDATER_FILE" ]; then
+              UPDATER_FILENAME=$(basename "$UPDATER_FILE")
+              SIG_FILE="${UPDATER_FILE}.sig"
+              SIGNATURE=$(cat "$SIG_FILE" 2>/dev/null | tr -d '\r\n' || echo "")
+            else
+              # Fallback to .msi (but auto-update may fail)
+              UPDATER_FILENAME="$BUILD_FILENAME"
+              SIG_FILE="${BUILD_FILE}.sig"
+              SIGNATURE=$(cat "$SIG_FILE" 2>/dev/null | tr -d '\r\n' || echo "")
+              echo "WARNING: No *-setup.exe found, using fallback - auto-update may FAIL!"
+            fi
+            MANIFEST_KEY="windows"
+            UPDATE_KEYS=("windows-x86_64")
+          elif [ "$PLATFORM" = "linux" ]; then
+            # .AppImage for manual download (manifest.json)
+            BUILD_FILE=$(find ./artifacts -name "*.AppImage" -not -name "*.sig" -not -name "*.tar.gz" | head -n 1)
+            BUILD_FILENAME=$(basename "$BUILD_FILE")
+
+            # .AppImage.tar.gz is required for Tauri auto-updater on Linux (update-manifest.json)
+            UPDATER_FILE=$(find ./artifacts -name "*.AppImage.tar.gz" -not -name "*.sig" | head -n 1)
+            if [ -n "$UPDATER_FILE" ]; then
+              UPDATER_FILENAME=$(basename "$UPDATER_FILE")
+              SIG_FILE="${UPDATER_FILE}.sig"
+              SIGNATURE=$(cat "$SIG_FILE" 2>/dev/null | tr -d '\r\n' || echo "")
+            else
+              # Fallback to .AppImage (but auto-update will fail)
+              UPDATER_FILENAME="$BUILD_FILENAME"
+              SIG_FILE="${BUILD_FILE}.sig"
+              SIGNATURE=$(cat "$SIG_FILE" 2>/dev/null | tr -d '\r\n' || echo "")
+              echo "WARNING: No .AppImage.tar.gz found, using .AppImage - auto-update will FAIL!"
+            fi
+            MANIFEST_KEY="linux"
+            UPDATE_KEYS=("linux-x86_64")
+          fi
+
+          # Update platform-specific version tracking (versions.json)
+          # Format: {"macos": "0.9.42", "windows": "0.9.40", "linux": "0.9.38"}
+          jq --arg platform "$MANIFEST_KEY" \
+             --arg version "$VERSION" \
+             '.[$platform] = $version' \
+             current-versions.json > versions.json
+
+          # Determine the highest version across all platforms for latest.txt (semver sort)
+          HIGHEST_VERSION=$(jq -r '[to_entries[].value] | map(split(".") | map(tonumber)) | sort_by(.[0], .[1], .[2]) | last | map(tostring) | join(".")' versions.json)
+          if [ -z "$HIGHEST_VERSION" ]; then
+            HIGHEST_VERSION="$VERSION"
+          fi
+          echo "v$HIGHEST_VERSION" > latest.txt
+          echo "$HIGHEST_VERSION" > version.json
+
+          # Merge platform into manifest.json (keeps all platforms, updates only current one)
+          jq --arg version "$VERSION" \
+             --arg releaseDate "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+             --arg key "$MANIFEST_KEY" \
+             --arg path "./releases/v$VERSION/$BUILD_FILENAME" \
+             --arg highestVersion "$HIGHEST_VERSION" \
+             '.version = $highestVersion | .releaseDate = $releaseDate | .downloads[$key] = $path | .platformVersions[$key] = $version' \
+             current-manifest.json > manifest.json
+
+          # Merge platform into update-manifest.json
+          # Each platform has its own version in the manifest
+          # The global "version" field shows the highest available
+          cp current-update-manifest.json temp-update-manifest.json
+
+          # Ensure platforms object exists
+          jq 'if .platforms == null then .platforms = {} else . end' temp-update-manifest.json > temp-fix.json
+          mv temp-fix.json temp-update-manifest.json
+
+          # For update-manifest.json, use UPDATER_FILENAME (macOS: .app.tar.gz, others: their standard format)
+          UPDATE_URL_FILENAME="${UPDATER_FILENAME:-$BUILD_FILENAME}"
+
+          for UPDATE_KEY in "${UPDATE_KEYS[@]}"; do
+            jq --arg pubDate "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+               --arg key "$UPDATE_KEY" \
+               --arg url "${UPDATER_BASE_URL}/releases/v$VERSION/$UPDATE_URL_FILENAME" \
+               --arg signature "$SIGNATURE" \
+               --arg platformVersion "$VERSION" \
+               '.pub_date = $pubDate | .platforms[$key] = {url: $url, signature: $signature, version: $platformVersion}' \
+               temp-update-manifest.json > temp-update-manifest-next.json
+            mv temp-update-manifest-next.json temp-update-manifest.json
+          done
+
+          # Set the highest version as global version (for Tauri updater compatibility)
+          jq --arg highestVersion "$HIGHEST_VERSION" \
+             '.version = $highestVersion' \
+             temp-update-manifest.json > update-manifest.json
+
+          # Upload updated manifests
+          scp -i ~/.ssh/deploy_key -P "$SSH_PORT" latest.txt version.json versions.json manifest.json update-manifest.json $SSH_USER@$SSH_HOST:$DEPLOY_PATH/
+
+          echo ""
+          echo "Manifests updated for $PLATFORM (v$VERSION)"
+          echo "Platform versions:"
+          cat versions.json
+          echo ""
+          echo "Highest version (shown in latest.txt): $HIGHEST_VERSION"
+
+      - name: Upload download page (if not exists)
+        env:
+          SSH_HOST: ${{ secrets.SSH_HOST }}
+          SSH_USER: ${{ secrets.SSH_USER }}
+          SSH_PORT: ${{ secrets.SSH_PORT || '22' }}
+          DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
+        run: |
+          # Check if index.html exists on server
+          if ! ssh -i ~/.ssh/deploy_key -p "$SSH_PORT" $SSH_USER@$SSH_HOST "test -f $DEPLOY_PATH/index.html"; then
+            echo "Uploading download page..."
+            scp -i ~/.ssh/deploy_key -P "$SSH_PORT" public/index.html $SSH_USER@$SSH_HOST:$DEPLOY_PATH/
+            echo "Download page uploaded"
+          else
+            echo "Download page already exists (skipping upload)"
+            echo "To update: manually upload public/index.html"
+          fi
+
+      - name: Cleanup
+        if: always()
+        run: |
+          rm -f ~/.ssh/deploy_key

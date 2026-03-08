@@ -1,0 +1,88 @@
+{
+  "build": {
+    "beforeDevCommand": "pnpm dev",
+    "beforeBuildCommand": "pnpm build",
+    "frontendDist": "../dist",
+    "devUrl": "http://localhost:1421"
+  },
+  "bundle": {
+    "active": true,
+    "targets": [
+      "app",
+      "dmg",
+      "nsis",
+      "appimage",
+      "deb",
+      "rpm"
+    ],
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns",
+      "icons/icon.ico"
+    ],
+    "publisher": "Lukasz Gorka",
+    "copyright": "Copyright (c) 2025 Lukasz Gorka. MIT License.",
+    "category": "Productivity",
+    "shortDescription": "Voice transcription with AI enhancement",
+    "longDescription": "A desktop application for voice recording, transcription via OpenAI-compatible APIs, and AI text enhancement. Copies result to clipboard with optional auto-paste. Built with Tauri for secure, native performance.",
+    "licenseFile": "../LICENSE",
+    "macOS": {
+      "entitlements": "Entitlements.plist",
+      "files": {
+        "Info.plist": "Info.plist"
+      },
+      "minimumSystemVersion": "10.13"
+    },
+    "windows": {
+      "certificateThumbprint": null,
+      "digestAlgorithm": "sha256",
+      "timestampUrl": "http://timestamp.digicert.com"
+    }
+  },
+  "productName": "zakip-voice",
+  "mainBinaryName": "zakip-voice",
+  "identifier": "pl.luksite.zakip-voice",
+  "plugins": {
+    "updater": {
+      "active": true,
+      "endpoints": [
+        "https://zakip-voice.luksite.pl/downloads/update-manifest.json"
+      ],
+      "dialog": false,
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDhGRDZCQTZEN0E3RkUzNzUKUldSMTQzOTZiYnJXajg2bVMxeDlyM2FrVlUzcktyanBucjBwMDlEWUNhbHdNOU9hV2UzQzZPcFMK",
+      "windows": {
+        "installMode": "passive"
+      }
+    }
+  },
+  "app": {
+    "windows": [
+      {
+        "label": "main",
+        "decorations": true,
+        "fullscreen": false,
+        "transparent": true,
+        "title": "zakip voice",
+        "width": 850,
+        "height": 1100,
+        "useHttpsScheme": true
+      }
+    ],
+    "macOSPrivateApi": true,
+    "security": {
+      "csp": "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self' data:; connect-src 'self' https:; media-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none';",
+      "dangerousDisableAssetCspModification": false,
+      "assetProtocol": {
+        "enable": true,
+        "scope": [
+          "$APPDATA/**",
+          "$RESOURCE/**"
+        ]
+      }
+    },
+    "withGlobalTauri": false
+  },
+  "version": "1.0.1"
+}

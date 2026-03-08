@@ -1,0 +1,393 @@
+<!DOCTYPE html>
+<html lang="pl" class="dark">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>zakip voice - Download</title>
+    <style>
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+
+      @keyframes gradient-shift {
+        0%,
+        100% {
+          background-position: 0% 50%;
+        }
+        50% {
+          background-position: 100% 50%;
+        }
+      }
+
+      @keyframes float {
+        0%,
+        100% {
+          transform: translate(0, 0) scale(1);
+        }
+        33% {
+          transform: translate(30px, -30px) scale(1.1);
+        }
+        66% {
+          transform: translate(-20px, 20px) scale(0.9);
+        }
+      }
+
+      body {
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+          Oxygen, Ubuntu, Cantarell, sans-serif;
+        background: #000000;
+        min-height: 100vh;
+        position: relative;
+        overflow-x: hidden;
+        color: white;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 20px;
+      }
+
+      body::before {
+        content: "";
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: radial-gradient(
+            circle at 30% 40%,
+            rgba(194, 24, 82, 0.12) 0%,
+            transparent 35%
+          ),
+          radial-gradient(
+            circle at 70% 60%,
+            rgba(87, 121, 188, 0.12) 0%,
+            transparent 35%
+          );
+        background-size: 200% 200%;
+        animation: gradient-shift 15s ease infinite;
+        z-index: 0;
+        pointer-events: none;
+      }
+
+      .animated-blob {
+        position: fixed;
+        border-radius: 50%;
+        filter: blur(60px);
+        opacity: 0.3;
+        z-index: 0;
+        pointer-events: none;
+      }
+
+      .blob-1 {
+        width: 400px;
+        height: 400px;
+        background: rgba(194, 24, 82, 0.4);
+        top: 20%;
+        left: 10%;
+        animation: float 20s ease-in-out infinite;
+      }
+
+      .blob-2 {
+        width: 350px;
+        height: 350px;
+        background: rgba(87, 121, 188, 0.4);
+        bottom: 20%;
+        right: 10%;
+        animation: float 25s ease-in-out infinite reverse;
+      }
+
+      .container {
+        background: rgba(0, 0, 0, 0.4);
+        backdrop-filter: blur(10px);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        border-radius: 20px;
+        padding: 40px;
+        max-width: 700px;
+        width: 100%;
+        position: relative;
+        z-index: 1;
+      }
+
+      h1 {
+        color: white;
+        margin-bottom: 30px;
+        font-size: 2em;
+        font-weight: 600;
+        text-align: center;
+      }
+
+      .version-badge {
+        display: inline-block;
+        background: rgba(255, 255, 255, 0.1);
+        border: 1px solid rgba(255, 255, 255, 0.2);
+        color: rgba(255, 255, 255, 0.9);
+        font-size: 0.85em;
+        padding: 6px 12px;
+        border-radius: 6px;
+        margin-left: 10px;
+        font-weight: 500;
+      }
+
+      .release-date {
+        color: rgba(255, 255, 255, 0.5);
+        font-size: 0.9em;
+        margin-bottom: 30px;
+      }
+
+      .download-section {
+        margin: 25px 0;
+        padding: 20px;
+        background: rgba(255, 255, 255, 0.03);
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        border-radius: 12px;
+        transition: all 0.2s ease;
+      }
+
+      .download-section:hover {
+        background: rgba(255, 255, 255, 0.05);
+        border-color: rgba(255, 255, 255, 0.15);
+      }
+
+      .platform-title {
+        color: white;
+        font-size: 1.1em;
+        margin-bottom: 15px;
+        font-weight: 600;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+      }
+
+      .platform-title-left {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+      }
+
+      .icon {
+        width: 24px;
+        height: 24px;
+        color: white;
+      }
+
+      .btn {
+        display: inline-block;
+        background: rgba(255, 255, 255, 0.1);
+        border: 1px solid rgba(255, 255, 255, 0.3);
+        color: white;
+        padding: 12px 28px;
+        border-radius: 8px;
+        text-decoration: none;
+        font-weight: 500;
+        font-size: 0.95em;
+        transition: all 0.2s ease;
+        margin: 5px 0;
+        cursor: pointer;
+        position: relative;
+        overflow: hidden;
+      }
+
+      .btn::before {
+        content: "";
+        position: absolute;
+        top: 0;
+        left: -100%;
+        width: 100%;
+        height: 100%;
+        background: linear-gradient(
+          90deg,
+          transparent,
+          rgba(255, 255, 255, 0.1),
+          transparent
+        );
+        transition: left 0.5s ease;
+      }
+
+      .btn:hover::before {
+        left: 100%;
+      }
+
+      .btn:hover {
+        border-color: rgba(255, 255, 255, 0.5);
+        background: rgba(255, 255, 255, 0.15);
+        transform: translateY(-2px);
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+      }
+
+      .info {
+        background: rgba(255, 255, 255, 0.05);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        padding: 20px;
+        border-radius: 10px;
+        margin-top: 30px;
+        font-size: 0.9em;
+        color: rgba(255, 255, 255, 0.7);
+        line-height: 1.6;
+      }
+
+      .info strong {
+        color: white;
+      }
+
+      .loading {
+        text-align: center;
+        color: rgba(255, 255, 255, 0.7);
+        padding: 20px;
+      }
+
+      .error {
+        background: rgba(194, 24, 82, 0.2);
+        border: 1px solid rgba(194, 24, 82, 0.4);
+        color: rgba(255, 255, 255, 0.9);
+        padding: 15px;
+        border-radius: 10px;
+        margin: 20px 0;
+      }
+
+      .hidden {
+        display: none;
+      }
+    </style>
+  </head>
+  <body>
+
+    <div class="animated-blob blob-1"></div>
+    <div class="animated-blob blob-2"></div>
+
+    <div class="container">
+      <h1>zakip voice</h1>
+      <div id="version-info">
+        <div class="loading">Ładowanie informacji o wersji...</div>
+      </div>
+
+      <div id="downloads" class="hidden"></div>
+
+      <div class="info">
+        <strong>Instrukcja instalacji:</strong><br /><br />
+        <strong>macOS:</strong> Pobierz plik .dmg, otwórz go i przeciągnij
+        aplikację do folderu Applications<br /><br />
+        <strong>Windows:</strong> Pobierz plik .exe i uruchom instalator<br /><br />
+        <strong>Linux:</strong> Pobierz plik .AppImage, nadaj mu uprawnienia
+        wykonywania (chmod +x) i uruchom
+      </div>
+    </div>
+
+    <script>
+      const platformIcons = {
+        macos:
+          '<svg class="icon" viewBox="0 0 24 24" fill="currentColor"><path d="M17.05 20.28c-.98.95-2.05.8-3.08.35-1.09-.46-2.09-.48-3.24 0-1.44.62-2.2.44-3.06-.35C2.79 15.25 3.51 7.59 9.05 7.31c1.35.07 2.29.74 3.08.8 1.18-.24 2.31-.93 3.57-.84 1.51.12 2.65.72 3.4 1.8-3.12 1.87-2.38 5.98.48 7.13-.57 1.5-1.31 2.99-2.54 4.09l.01-.01zM12.03 7.25c-.15-2.23 1.66-4.07 3.74-4.25.29 2.58-2.34 4.5-3.74 4.25z"/></svg>',
+        windows:
+          '<svg class="icon" viewBox="0 0 24 24" fill="currentColor"><path d="M0 3.449L9.75 2.1v9.451H0m10.949-9.602L24 0v11.4H10.949M0 12.6h9.75v9.451L0 20.699M10.949 12.6H24V24l-12.9-1.801"/></svg>',
+        linux:
+          '<svg class="icon" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.373 0 0 5.373 0 12s5.373 12 12 12 12-5.373 12-12S18.627 0 12 0zm0 2c5.514 0 10 4.486 10 10s-4.486 10-10 10S2 17.514 2 12 6.486 2 12 2z"/></svg>',
+      };
+
+      const platformNames = {
+        macos: "macOS",
+        windows: "Windows",
+        linux: "Linux",
+      };
+
+      async function loadManifest() {
+        try {
+          // Load both manifests to get platform-specific versions (with cache busting)
+          const cacheBuster = `?t=${Date.now()}`;
+          const [manifestResponse, updateManifestResponse] = await Promise.all([
+            fetch("./manifest.json" + cacheBuster),
+            fetch("./update-manifest.json" + cacheBuster),
+          ]);
+
+          if (!manifestResponse.ok) {
+            throw new Error("Nie można pobrać informacji o wersjach");
+          }
+
+          const manifest = await manifestResponse.json();
+          const updateManifest = updateManifestResponse.ok
+            ? await updateManifestResponse.json()
+            : null;
+
+          displayVersion(manifest);
+          displayDownloads(manifest, updateManifest);
+        } catch (error) {
+          document.getElementById("version-info").innerHTML =
+            '<div class="error">Błąd: ' + error.message + "</div>";
+        }
+      }
+
+      function displayVersion() {
+        document.getElementById("version-info").innerHTML = "";
+      }
+
+      function displayDownloads(manifest, updateManifest) {
+        const downloadsDiv = document.getElementById("downloads");
+
+        if (
+          !manifest.downloads ||
+          Object.keys(manifest.downloads).length === 0
+        ) {
+          downloadsDiv.innerHTML =
+            '<div class="error">Brak dostępnych wersji do pobrania</div>';
+          downloadsDiv.classList.remove("hidden");
+          return;
+        }
+
+        // Map platform names to update-manifest keys
+        const platformToUpdateKey = {
+          macos: "darwin-universal",
+          windows: "windows-x86_64",
+          linux: "linux-x86_64",
+        };
+
+        let html = "";
+
+        for (const [platform, url] of Object.entries(manifest.downloads)) {
+          const icon = platformIcons[platform] || "";
+          const name = platformNames[platform] || platform;
+          const filename = url.split("/").pop();
+
+          let versionBadge = "";
+          if (updateManifest && updateManifest.platforms) {
+            const updateKey = platformToUpdateKey[platform];
+            if (updateKey && updateManifest.platforms[updateKey]) {
+              const platformUrl = updateManifest.platforms[updateKey].url;
+              const versionMatch = platformUrl.match(/\/v([0-9.]+)\//);
+              const version = versionMatch
+                ? versionMatch[1]
+                : updateManifest.version;
+              versionBadge = `<span class="version-badge">v${version}</span>`;
+            }
+          }
+
+          const isValidUrl = url && !url.endsWith('/') && filename && filename.length > 0;
+          const downloadUrl = isValidUrl ? url : null;
+          const downloadAttr = downloadUrl ? `download="${filename}"` : '';
+
+          html += `
+                    <div class="download-section">
+                        <div class="platform-title">
+                            <div class="platform-title-left">
+                                ${icon}
+                                ${name}
+                            </div>
+                            ${versionBadge}
+                        </div>
+                        ${downloadUrl
+                          ? `<a href="${downloadUrl}" class="btn" ${downloadAttr}>Pobierz</a>`
+                          : `<div class="error">Błąd: brak pliku do pobrania (URL: ${url || 'brak'})</div>`
+                        }
+                    </div>
+                `;
+        }
+
+        downloadsDiv.innerHTML = html;
+        downloadsDiv.classList.remove("hidden");
+      }
+
+      // Load manifest on page load
+      loadManifest();
+    </script>
+  </body>
+</html>

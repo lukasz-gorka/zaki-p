@@ -1,0 +1,197 @@
+name: Build macOS
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version number (e.g., 0.9.21)'
+        required: true
+        type: string
+      signing_mode:
+        description: 'none | api | apple-id — controls notarization'
+        required: false
+        default: none
+        type: choice
+        options:
+          - none
+          - api
+          - apple-id
+      skip_deploy:
+        description: 'Skip deployment to server'
+        required: false
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+
+jobs:
+  build-macos:
+    runs-on: macos-latest
+    outputs:
+      version: ${{ inputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-apple-darwin,x86_64-apple-darwin
+
+      - name: Update version files
+        run: |
+          node scripts/set-version.js ${{ inputs.version }}
+
+      - name: Install dependencies
+        run: pnpm install
+
+      - name: Configure Apple credentials (api key)
+        if: ${{ inputs.signing_mode == 'api' }}
+        run: |
+          echo "Using App Store Connect API key"
+        env:
+          APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
+          APPLE_API_KEY: ${{ secrets.APPLE_API_KEY }}
+          APPLE_API_KEY_CONTENT: ${{ secrets.APPLE_API_KEY_CONTENT }}
+
+      - name: Configure Apple credentials (apple-id)
+        if: ${{ inputs.signing_mode == 'apple-id' }}
+        run: |
+          echo "Using Apple ID app-specific password"
+        env:
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+
+      - name: Build Tauri app (Universal)
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+          APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
+          APPLE_API_KEY: ${{ secrets.APPLE_API_KEY }}
+          APPLE_API_KEY_CONTENT: ${{ secrets.APPLE_API_KEY_CONTENT }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        with:
+          tagName: v${{ inputs.version }}-macos
+          releaseName: zakip voice v${{ inputs.version }} for macOS
+          releaseBody: 'zakip voice macOS build v${{ inputs.version }}'
+          releaseDraft: false
+          prerelease: false
+          args: --target universal-apple-darwin
+
+      - name: Ad-hoc codesign app bundle
+        run: |
+          BUNDLE_DIR="src-tauri/target/universal-apple-darwin/release/bundle"
+          APP_BUNDLE=""
+          for d in "$BUNDLE_DIR"/macos/*.app; do
+            [ -d "$d" ] && APP_BUNDLE="$d" && break
+          done
+
+          if [ -n "$APP_BUNDLE" ]; then
+            echo "Signing $APP_BUNDLE ..."
+            codesign --force --deep --sign - "$APP_BUNDLE"
+            echo "Verifying signature..."
+            codesign -dv --verbose=2 "$APP_BUNDLE" 2>&1 | head -8
+
+            # Rebuild DMG with signed app
+            DMG_FILE=""
+            for f in "$BUNDLE_DIR"/dmg/*.dmg; do
+              [ -f "$f" ] && DMG_FILE="$f" && break
+            done
+            if [ -n "$DMG_FILE" ]; then
+              echo "Rebuilding DMG with signed app: $DMG_FILE"
+              rm -f "$DMG_FILE"
+              hdiutil create -volname "zakip-voice" -srcfolder "$APP_BUNDLE" -ov -format UDZO "$DMG_FILE"
+              echo "DMG rebuilt."
+            fi
+
+            # Rebuild .app.tar.gz with signed app
+            TARGZ=""
+            for f in "$BUNDLE_DIR"/macos/*.app.tar.gz; do
+              [ -f "$f" ] && TARGZ="$f" && break
+            done
+            if [ -n "$TARGZ" ]; then
+              echo "Rebuilding .app.tar.gz with signed app..."
+              APP_NAME=$(basename "$APP_BUNDLE")
+              COPYFILE_DISABLE=1 tar -czf "$TARGZ" -C "$(dirname "$APP_BUNDLE")" "$APP_NAME"
+              echo "Rebuilt: $TARGZ"
+              # Remove old signature (will be re-signed below)
+              rm -f "${TARGZ}.sig"
+            fi
+          else
+            echo "WARNING: No .app bundle found in $BUNDLE_DIR/macos/"
+          fi
+
+      - name: Verify and fix signature files
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        run: |
+          BUNDLE_DIR="src-tauri/target/universal-apple-darwin/release/bundle"
+          echo "=== All bundle files ==="
+          find "$BUNDLE_DIR" -type f -not -path "*/macos/*.app/*" | sort
+
+          # Find the .app.tar.gz (updater target)
+          UPDATER_FILE=""
+          for f in "$BUNDLE_DIR"/macos/*.app.tar.gz; do
+            [ -f "$f" ] && UPDATER_FILE="$f" && break
+          done
+
+          if [ -z "$UPDATER_FILE" ]; then
+            echo "ERROR: No *.app.tar.gz found in $BUNDLE_DIR/macos/"
+            ls -la "$BUNDLE_DIR/macos/" 2>/dev/null || echo "(dir not found)"
+            exit 1
+          fi
+
+          echo "Updater file: $UPDATER_FILE"
+          SIG_FILE="${UPDATER_FILE}.sig"
+
+          if [ -f "$SIG_FILE" ] && [ -s "$SIG_FILE" ]; then
+            echo "Signature file exists and is non-empty: $SIG_FILE"
+          else
+            echo "WARNING: Signature file missing or empty, signing manually..."
+            if [ -n "$TAURI_SIGNING_PRIVATE_KEY" ]; then
+              pnpm tauri signer sign -k "$TAURI_SIGNING_PRIVATE_KEY" -p "${TAURI_SIGNING_PRIVATE_KEY_PASSWORD:-}" "$UPDATER_FILE"
+              echo "Manually signed: $UPDATER_FILE"
+            else
+              echo "ERROR: TAURI_SIGNING_PRIVATE_KEY not set, cannot sign!"
+              exit 1
+            fi
+          fi
+
+          echo "=== Signature content (first 80 chars) ==="
+          head -c 80 "$SIG_FILE" && echo "..."
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos-build
+          path: |
+            src-tauri/target/universal-apple-darwin/release/bundle/**/*.dmg
+            src-tauri/target/universal-apple-darwin/release/bundle/**/*.sig
+            src-tauri/target/universal-apple-darwin/release/bundle/**/*.app.tar.gz
+          retention-days: 5
+          if-no-files-found: error
+
+  deploy:
+    needs: build-macos
+    if: ${{ !inputs.skip_deploy }}
+    uses: ./.github/workflows/deploy-release.yml
+    with:
+      version: ${{ inputs.version }}
+      platform: macos
+    secrets: inherit

@@ -1,0 +1,149 @@
+name: Build Windows
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version number (e.g., 0.9.21)'
+        required: true
+        type: string
+      signing_mode:
+        description: 'none | azure | file (pfx) — controls code signing'
+        required: false
+        default: none
+        type: choice
+        options:
+          - none
+          - azure
+          - file
+      skip_deploy:
+        description: 'Skip deployment to server'
+        required: false
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    outputs:
+      version: ${{ inputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Update version files
+        run: |
+          node scripts/set-version.js ${{ inputs.version }}
+
+      - name: Install dependencies
+        run: pnpm install
+
+      - name: Azure Login (for signing)
+        if: ${{ inputs.signing_mode == 'azure' }}
+        uses: azure/login@v1
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          client-secret: ${{ secrets.AZURE_CLIENT_SECRET }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+
+      - name: Build Tauri app
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+          AZURE_KEY_VAULT_URI: ${{ secrets.AZURE_KEY_VAULT_URI }}
+          AZURE_CERT_NAME: ${{ secrets.AZURE_CERT_NAME }}
+          WINDOWS_CERTIFICATE: ${{ secrets.WINDOWS_CERTIFICATE }}
+          WINDOWS_CERTIFICATE_PASSWORD: ${{ secrets.WINDOWS_CERTIFICATE_PASSWORD }}
+        with:
+          tagName: v${{ inputs.version }}-windows
+          releaseName: zakip voice v${{ inputs.version }} for Windows
+          releaseBody: 'zakip voice Windows build v${{ inputs.version }}'
+          releaseDraft: false
+          prerelease: false
+          args: --target x86_64-pc-windows-msvc
+          includeDebug: false
+          includeDebugSymbols: false
+          # Signing modes:
+          # - azure: requires AZURE_KEY_VAULT_URI, AZURE_CERT_NAME, AZURE_CLIENT_ID/SECRET/TENANT_ID
+          # - file: requires WINDOWS_CERTIFICATE (base64 pfx) + WINDOWS_CERTIFICATE_PASSWORD
+          # - none: builds unsigned (default)
+          # tauri-action picks up the available secrets automatically
+
+      - name: Verify and fix signature files
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        shell: bash
+        run: |
+          BUNDLE_DIR="src-tauri/target/x86_64-pc-windows-msvc/release/bundle"
+          echo "=== All bundle files ==="
+          find "$BUNDLE_DIR" -type f 2>/dev/null | sort || ls -R "$BUNDLE_DIR"
+
+          # Find the NSIS setup exe (updater target)
+          UPDATER_FILE=""
+          for f in "$BUNDLE_DIR"/nsis/*-setup.exe; do
+            [ -f "$f" ] && UPDATER_FILE="$f" && break
+          done
+
+          if [ -z "$UPDATER_FILE" ]; then
+            echo "ERROR: No *-setup.exe found in $BUNDLE_DIR/nsis/"
+            echo "Contents of nsis dir:"
+            ls -la "$BUNDLE_DIR/nsis/" 2>/dev/null || echo "(dir not found)"
+            exit 1
+          fi
+
+          echo "Updater file: $UPDATER_FILE"
+          SIG_FILE="${UPDATER_FILE}.sig"
+
+          if [ -f "$SIG_FILE" ] && [ -s "$SIG_FILE" ]; then
+            echo "Signature file exists and is non-empty: $SIG_FILE"
+          else
+            echo "WARNING: Signature file missing or empty, signing manually..."
+            if [ -n "$TAURI_SIGNING_PRIVATE_KEY" ]; then
+              pnpm tauri signer sign -k "$TAURI_SIGNING_PRIVATE_KEY" -p "${TAURI_SIGNING_PRIVATE_KEY_PASSWORD:-}" "$UPDATER_FILE"
+              echo "Manually signed: $UPDATER_FILE"
+            else
+              echo "ERROR: TAURI_SIGNING_PRIVATE_KEY not set, cannot sign!"
+              exit 1
+            fi
+          fi
+
+          echo "=== Signature content (first 80 chars) ==="
+          head -c 80 "$SIG_FILE" && echo "..."
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-build
+          path: |
+            src-tauri/target/x86_64-pc-windows-msvc/release/bundle/nsis/
+            src-tauri/target/x86_64-pc-windows-msvc/release/bundle/msi/
+            src-tauri/target/x86_64-pc-windows-msvc/release/bundle/**/*.sig
+          retention-days: 5
+          if-no-files-found: error
+
+  deploy:
+    needs: build-windows
+    if: ${{ !inputs.skip_deploy }}
+    uses: ./.github/workflows/deploy-release.yml
+    with:
+      version: ${{ inputs.version }}
+      platform: windows
+    secrets: inherit

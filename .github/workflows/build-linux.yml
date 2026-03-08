@@ -1,0 +1,158 @@
+name: Build Linux
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version number (e.g., 0.9.21)'
+        required: true
+        type: string
+      skip_deploy:
+        description: 'Skip deployment to server'
+        required: false
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+
+jobs:
+  build-linux:
+    runs-on: ubuntu-22.04
+    outputs:
+      version: ${{ inputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install dependencies (ubuntu only)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf libssl-dev libasound2-dev libxdo-dev
+
+      - name: Update version files
+        run: |
+          node scripts/set-version.js ${{ inputs.version }}
+
+      - name: Install dependencies
+        run: pnpm install
+
+      - name: Build Tauri app
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        with:
+          tagName: v${{ inputs.version }}-linux
+          releaseName: zakip voice v${{ inputs.version }} for Linux
+          releaseBody: 'zakip voice Linux build v${{ inputs.version }}'
+          releaseDraft: false
+          prerelease: false
+
+      - name: Apply Wayland fixes, rebuild AppImage and sign
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        run: |
+          BUNDLE_DIR="src-tauri/target/release/bundle"
+          APPIMAGE_DIR="$BUNDLE_DIR/appimage"
+
+          echo "=== Bundle contents after tauri-action ==="
+          ls -la "$APPIMAGE_DIR/" 2>/dev/null || echo "(appimage dir not found)"
+
+          # Step 1: Apply Wayland compatibility fix to AppDir
+          chmod +x scripts/fix-appimage-linux.sh
+          ./scripts/fix-appimage-linux.sh
+
+          # Step 2: Find the original AppImage (tauri-action may have deleted it after upload)
+          APPIMAGE_FILE=""
+          for f in "$APPIMAGE_DIR"/*.AppImage; do
+            [ -f "$f" ] && APPIMAGE_FILE="$f" && break
+          done
+
+          # Step 3: Rebuild AppImage from modified AppDir if needed
+          APPDIR=""
+          for d in "$APPIMAGE_DIR"/*.AppDir; do
+            [ -d "$d" ] && APPDIR="$d" && break
+          done
+
+          if [ -z "$APPDIR" ]; then
+            echo "ERROR: No AppDir found in $APPIMAGE_DIR"
+            exit 1
+          fi
+
+          # Determine output filename
+          if [ -n "$APPIMAGE_FILE" ]; then
+            OUTPUT_APPIMAGE="$APPIMAGE_FILE"
+            echo "Found existing AppImage: $OUTPUT_APPIMAGE"
+          else
+            OUTPUT_APPIMAGE="$APPIMAGE_DIR/zakip-voice_${{ inputs.version }}_amd64.AppImage"
+            echo "AppImage not found, will rebuild as: $OUTPUT_APPIMAGE"
+          fi
+
+          # Download appimagetool and rebuild
+          echo "Rebuilding AppImage from modified AppDir..."
+          APPIMAGETOOL="$APPIMAGE_DIR/appimagetool-x86_64.AppImage"
+          if [ ! -f "$APPIMAGETOOL" ]; then
+            curl -Lo "$APPIMAGETOOL" "https://github.com/AppImage/appimagetool/releases/download/continuous/appimagetool-x86_64.AppImage"
+            chmod +x "$APPIMAGETOOL"
+          fi
+
+          # Remove old AppImage to avoid "file exists" error
+          rm -f "$OUTPUT_APPIMAGE"
+          ARCH=x86_64 "$APPIMAGETOOL" --no-appstream "$APPDIR" "$OUTPUT_APPIMAGE"
+          echo "Rebuilt AppImage: $OUTPUT_APPIMAGE"
+
+          # Step 4: Create .tar.gz for updater
+          TARGZ_FILE="${OUTPUT_APPIMAGE}.tar.gz"
+          echo "Creating tar.gz: $TARGZ_FILE"
+          tar -czf "$TARGZ_FILE" -C "$(dirname "$OUTPUT_APPIMAGE")" "$(basename "$OUTPUT_APPIMAGE")"
+
+          # Step 5: Sign the .tar.gz
+          echo "Signing $TARGZ_FILE..."
+          if [ -n "$TAURI_SIGNING_PRIVATE_KEY" ]; then
+            pnpm tauri signer sign -k "$TAURI_SIGNING_PRIVATE_KEY" -p "${TAURI_SIGNING_PRIVATE_KEY_PASSWORD:-}" "$TARGZ_FILE"
+            echo "Signed successfully!"
+          else
+            echo "ERROR: TAURI_SIGNING_PRIVATE_KEY not set, cannot sign!"
+            exit 1
+          fi
+
+          echo "=== Final bundle files ==="
+          ls -la "$APPIMAGE_DIR"/*.AppImage "$APPIMAGE_DIR"/*.tar.gz "$APPIMAGE_DIR"/*.sig 2>/dev/null
+
+          echo "=== Signature content (first 80 chars) ==="
+          head -c 80 "${TARGZ_FILE}.sig" && echo "..."
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-build
+          path: |
+            src-tauri/target/release/bundle/**/*.AppImage
+            src-tauri/target/release/bundle/**/*.AppImage.tar.gz
+            src-tauri/target/release/bundle/**/*.sig
+          retention-days: 5
+          if-no-files-found: error
+
+  deploy:
+    needs: build-linux
+    if: ${{ !inputs.skip_deploy }}
+    uses: ./.github/workflows/deploy-release.yml
+    with:
+      version: ${{ inputs.version }}
+      platform: linux
+    secrets: inherit

@@ -1,0 +1,18 @@
+{
+    "style": "default",
+    "rsc": true,
+    "tailwind": {
+        "config": "",
+        "css": "./public/css/style.css",
+        "baseColor": "neutral",
+        "cssVariables": true
+    },
+    "aliases": {
+        "components": "@/views",
+        "utils": "@/views/ui/lib/utils",
+        "ui": "@/views/ui",
+        "lib": "@/lib",
+        "hooks": "@/hooks"
+    },
+    "iconLibrary": "lucide"
+}

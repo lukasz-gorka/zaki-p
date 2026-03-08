@@ -1,0 +1,1 @@
+export const LICENSE_BACKEND_URL = __LICENSE_URL__;

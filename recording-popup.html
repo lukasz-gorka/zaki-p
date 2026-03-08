@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="en" class="dark">
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>Recording</title>
+        <style>
+            @keyframes pulse-square {
+                0%, 100% {
+                    opacity: 0.3;
+                    transform: scale(0.8);
+                }
+                50% {
+                    opacity: 1;
+                    transform: scale(1.2);
+                }
+            }
+        </style>
+    </head>
+    <body>
+        <div id="root"></div>
+        <script type="module" src="/src/voice/view/RecordingPopup.tsx"></script>
+    </body>
+</html>
