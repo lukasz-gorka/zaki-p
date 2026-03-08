@@ -31,10 +31,6 @@ export class G {
         this.voice = new VoiceModule({
             storeManager: new VoiceStoreManager(),
         });
-        if (this.license.isProActive()) {
-            const {QuickChatPopupManager} = await import("../../../pro/quickChat/QuickChatPopupManager.ts");
-            this.quickChatPopup = new QuickChatPopupManager();
-        }
 
         this.events.on("skill:voice-execute", (data: {skillId: string}) => {
             this.voice.executeSkillWithVoice(data.skillId);

@@ -30,7 +30,6 @@ export class LicenseModule {
             } else {
                 const storedKey = await G.rustProxy.getStoredLicenseKey();
                 if (storedKey) {
-                    // Cache expired but key exists — try background revalidation
                     this.revalidateIfNeeded().catch(() => {
                         this.store.setStatus("inactive");
                     });

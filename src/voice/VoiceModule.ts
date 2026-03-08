@@ -274,14 +274,14 @@ export class VoiceModule {
             this.storeManager.setRecordingState(false);
             this.storeManager.setTranscribingState(false);
             await this.unregisterEscapeShortcut();
-            await G.statusPopup.hide();
+            await G.statusPopup.popState("voice");
         } catch (error) {
             this.currentSession = null;
             this.pendingSkillId = null;
             this.storeManager.setRecordingState(false);
             this.storeManager.setTranscribingState(false);
             await this.unregisterEscapeShortcut();
-            await G.statusPopup.hide();
+            await G.statusPopup.popState("voice");
             Logger.error("[VoiceModule] Failed to cancel recording:", {error});
         }
     }
@@ -310,7 +310,7 @@ export class VoiceModule {
             await this.toggleRecordingForChat();
         } else if (action === "stop-speaking") {
             this.stopSpeaking();
-            await G.statusPopup.hide();
+            await G.statusPopup.popState("voice");
         } else if (action === "cancel") {
             this.audioPlayer.stop();
             await this.cancelProcessing();
@@ -360,7 +360,7 @@ export class VoiceModule {
 
         try {
             this.storeManager.setRecordingState(true);
-            await G.statusPopup.show();
+            await G.statusPopup.pushState("voice", "initializing");
 
             const settings = this.state();
             this.currentSession = await G.rustProxy.startAudioRecording({
@@ -370,7 +370,7 @@ export class VoiceModule {
                 device_id: settings.speechToText.inputDeviceId || undefined,
             });
 
-            await G.statusPopup.setState("recording");
+            await G.statusPopup.updateState("voice", "recording");
 
             if (settings.speechToText.playSoundNotification) {
                 G.rustProxy.playNotificationSound("start");
@@ -393,7 +393,7 @@ export class VoiceModule {
             this.currentSession = null;
             this.pendingSkillId = null;
             this.storeManager.setRecordingState(false);
-            await G.statusPopup.hide();
+            await G.statusPopup.popState("voice");
             await this.unregisterEscapeShortcut();
             Logger.error("[VoiceModule] Failed to start recording:", {error});
 
@@ -433,7 +433,7 @@ export class VoiceModule {
             this.storeManager.setProcessingState(false);
             this.storeManager.setSpeakingState(false);
             await this.unregisterEscapeShortcut();
-            await G.statusPopup.hide();
+            await G.statusPopup.popState("voice");
 
             if (wasReset) {
                 Logger.info("[VoiceModule] Force reset cleared stuck recording");
@@ -462,7 +462,7 @@ export class VoiceModule {
             this.currentSession = null;
             this.storeManager.transitionRecordingToTranscribing();
             await this.unregisterEscapeShortcut();
-            await G.statusPopup.setState("transcribing");
+            await G.statusPopup.updateState("voice", "transcribing");
 
             const settings = this.state();
 
@@ -503,7 +503,7 @@ export class VoiceModule {
                 const skill = getSkillModule().getSkillById(skillId);
                 if (skill && skill.model) {
                     this.storeManager.transitionTranscribingToProcessing();
-                    await G.statusPopup.setState("processing");
+                    await G.statusPopup.updateState("voice", "processing");
 
                     let clipboardForSkill;
                     try {
@@ -532,7 +532,7 @@ export class VoiceModule {
                 this.storeManager.setTranscribingState(false);
             }
 
-            await G.statusPopup.hide();
+            await G.statusPopup.popState("voice");
 
             const historyItem: TranscriptionHistoryItem = {
                 id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
@@ -572,7 +572,7 @@ export class VoiceModule {
             this.storeManager.setTranscribingState(false);
             this.storeManager.setProcessingState(false);
             await this.unregisterEscapeShortcut();
-            await G.statusPopup.hide();
+            await G.statusPopup.popState("voice");
             Logger.error("[VoiceModule] Failed to transcribe audio:", {error});
 
             const errorMessage = error instanceof Error ? error.message : String(error);

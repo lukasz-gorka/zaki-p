@@ -8,6 +8,7 @@ export type PopupState = "initializing" | "recording" | "transcribing" | "enhanc
 export class StatusPopupManager {
     private popupActionUnlisten: (() => void) | null = null;
     private onPopupAction: ((action: string) => void) | null = null;
+    private stateStack: Array<{id: string; state: PopupState; label?: string; startTime: number}> = [];
 
     public setPopupActionHandler(handler: (action: string) => void): void {
         this.onPopupAction = handler;
@@ -135,11 +136,49 @@ export class StatusPopupManager {
         }
     }
 
-    public async setState(state: PopupState, label?: string): Promise<void> {
+    public async setState(state: PopupState, label?: string, startTime?: number): Promise<void> {
         try {
-            await emitTo(RECORDING_POPUP_LABEL, `recording-popup-state-${RECORDING_POPUP_LABEL}`, {state, label});
+            await emitTo(RECORDING_POPUP_LABEL, `recording-popup-state-${RECORDING_POPUP_LABEL}`, {state, label, startTime});
         } catch (error) {
             Logger.error("[StatusPopupManager] Failed to set popup state:", {error});
+        }
+    }
+
+    public async pushState(id: string, state: PopupState, label?: string): Promise<void> {
+        const existing = this.stateStack.findIndex((entry) => entry.id === id);
+        if (existing !== -1) {
+            this.stateStack[existing] = {id, state, label, startTime: this.stateStack[existing].startTime};
+        } else {
+            this.stateStack.push({id, state, label, startTime: Date.now()});
+        }
+        await this.show();
+        await this.emitTopState();
+    }
+
+    public async updateState(id: string, state: PopupState, label?: string): Promise<void> {
+        const idx = this.stateStack.findIndex((entry) => entry.id === id);
+        if (idx === -1) {
+            return this.pushState(id, state, label);
+        }
+        this.stateStack[idx] = {id, state, label, startTime: this.stateStack[idx].startTime};
+        if (idx === this.stateStack.length - 1) {
+            await this.emitTopState();
+        }
+    }
+
+    public async popState(id: string): Promise<void> {
+        this.stateStack = this.stateStack.filter((entry) => entry.id !== id);
+        if (this.stateStack.length === 0) {
+            await this.hide();
+        } else {
+            await this.emitTopState();
+        }
+    }
+
+    private async emitTopState(): Promise<void> {
+        const top = this.stateStack[this.stateStack.length - 1];
+        if (top) {
+            await this.setState(top.state, top.label, top.startTime);
         }
     }
 

@@ -22,6 +22,11 @@ class AppInitializer {
 
             await G.license.init();
 
+            if (G.license.isProActive()) {
+                const {QuickChatPopupManager} = await import("../../pro/quickChat/QuickChatPopupManager.ts");
+                G.quickChatPopup = new QuickChatPopupManager();
+            }
+
             await PluginRegistry.init();
             await PluginRegistry.initPlugins();
 

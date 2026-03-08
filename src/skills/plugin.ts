@@ -76,8 +76,7 @@ export const skillsPlugin: Plugin = {
 
                                 if (freshSkill.showGlobalPopup) {
                                     try {
-                                        await G.statusPopup.show();
-                                        await G.statusPopup.setState("skill-executing", freshSkill.label);
+                                        await G.statusPopup.pushState(`skill-${freshSkill.uuid}`, "skill-executing", freshSkill.label);
                                     } catch (popupErr) {
                                         Logger.warn("[Skills] Failed to show global popup", {error: popupErr as Error});
                                     }
@@ -88,7 +87,7 @@ export const skillsPlugin: Plugin = {
                                     sm.setExecuting(undefined);
 
                                     if (freshSkill.showGlobalPopup) {
-                                        await G.statusPopup.hide();
+                                        await G.statusPopup.popState(`skill-${freshSkill.uuid}`);
                                     }
 
                                     if (result) {
@@ -104,7 +103,7 @@ export const skillsPlugin: Plugin = {
                                 } catch (err) {
                                     sm.setExecuting(undefined);
                                     if (freshSkill.showGlobalPopup) {
-                                        await G.statusPopup.hide();
+                                        await G.statusPopup.popState(`skill-${freshSkill.uuid}`);
                                     }
                                     Logger.error(`[Skills] Silent execution error`, {error: err as Error});
                                 }

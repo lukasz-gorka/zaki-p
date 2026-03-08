@@ -33,11 +33,7 @@ function RecordingPopup() {
     const [elapsedSeconds, setElapsedSeconds] = useState(0);
     const [audioLevel, setAudioLevel] = useState(0);
     const stateStartTimeRef = useRef<number>(Date.now());
-
-    useEffect(() => {
-        stateStartTimeRef.current = Date.now();
-        setElapsedSeconds(0);
-    }, [state]);
+    const stateRef = useRef<PopupState>("initializing");
 
     useEffect(() => {
         if (state === "initializing") return;
@@ -57,9 +53,17 @@ function RecordingPopup() {
                 const window = getCurrentWebviewWindow();
                 const label = window.label;
                 const eventName = `recording-popup-state-${label}`;
-                const unlisten = await listen<{state: PopupState; label?: string}>(eventName, (event) => {
+                const unlisten = await listen<{state: PopupState; label?: string; startTime?: number}>(eventName, (event) => {
+                    const prevState = stateRef.current;
                     setState(event.payload.state);
+                    stateRef.current = event.payload.state;
                     setCustomLabel(event.payload.label);
+                    if (event.payload.startTime) {
+                        stateStartTimeRef.current = event.payload.startTime;
+                    } else if (event.payload.state !== prevState) {
+                        stateStartTimeRef.current = Date.now();
+                    }
+                    setElapsedSeconds(Math.floor((Date.now() - stateStartTimeRef.current) / 1000));
                 });
                 unlistenFn = unlisten;
 

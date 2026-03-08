@@ -126,6 +126,30 @@ body {
     border: 1px solid var(--border) !important;
 }
 
+/* Custom scrollbar for Windows (WebView2 supports webkit scrollbar) */
+* {
+    scrollbar-width: thin;
+    scrollbar-color: var(--muted-foreground) transparent;
+}
+
+*::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+}
+
+*::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+*::-webkit-scrollbar-thumb {
+    background-color: var(--muted-foreground);
+    border-radius: 3px;
+}
+
+*::-webkit-scrollbar-thumb:hover {
+    background-color: var(--foreground);
+}
+
 @layer base {
     * {
         @apply border-border outline-ring/50;

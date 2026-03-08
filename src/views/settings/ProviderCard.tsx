@@ -60,6 +60,13 @@ export function ProviderCard({provider, update, remove}: ProviderCardProps) {
     };
 
     const ALL_TAGS: AIModelTag[] = ["chat", "vision", "image-generation", "speech-to-text", "text-to-speech"];
+    const TAG_LABELS: Record<AIModelTag, string> = {
+        chat: "chat",
+        vision: "vision",
+        "image-generation": "image",
+        "speech-to-text": "s2t",
+        "text-to-speech": "t2s",
+    };
 
     const resolveModelTags = (modelId: string, typeOverride?: ManualModelType): AIModelTag[] => {
         if (!typeOverride) return detectModelTags(modelId);
@@ -258,7 +265,7 @@ export function ProviderCard({provider, update, remove}: ProviderCardProps) {
                                                             className={`text-[10px] cursor-pointer select-none ${active ? "" : "opacity-30 hover:opacity-60"}`}
                                                             onClick={() => toggleModelTag(model.id, tag)}
                                                         >
-                                                            {tag}
+                                                            {TAG_LABELS[tag]}
                                                         </Badge>
                                                     );
                                                 })}
