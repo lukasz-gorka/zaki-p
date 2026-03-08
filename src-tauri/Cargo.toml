@@ -1,6 +1,6 @@
 [package]
 name = "zaki-p"
-version = "1.0.1"
+version = "1.1.0"
 description = "Voice transcription desktop app with AI enhancement"
 authors = ["Lukasz Gorka"]
 license = "MIT"
