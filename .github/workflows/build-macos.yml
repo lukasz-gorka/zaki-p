@@ -76,6 +76,9 @@ jobs:
           APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
 
+      - name: Create license HMAC key
+        run: echo "${{ secrets.LICENSE_HMAC_KEY }}" | base64 -d > src-tauri/license_hmac_key.bin
+
       - name: Build Tauri app (Universal)
         uses: tauri-apps/tauri-action@v0
         env:

@@ -52,6 +52,9 @@ jobs:
       - name: Install dependencies
         run: pnpm install
 
+      - name: Create license HMAC key
+        run: echo "${{ secrets.LICENSE_HMAC_KEY }}" | base64 -d > src-tauri/license_hmac_key.bin
+
       - name: Build Tauri app
         uses: tauri-apps/tauri-action@v0
         env:

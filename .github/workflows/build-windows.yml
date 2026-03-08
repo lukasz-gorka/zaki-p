@@ -64,6 +64,10 @@ jobs:
           client-secret: ${{ secrets.AZURE_CLIENT_SECRET }}
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
 
+      - name: Create license HMAC key
+        shell: bash
+        run: echo "${{ secrets.LICENSE_HMAC_KEY }}" | base64 -d > src-tauri/license_hmac_key.bin
+
       - name: Build Tauri app
         uses: tauri-apps/tauri-action@v0
         env:
